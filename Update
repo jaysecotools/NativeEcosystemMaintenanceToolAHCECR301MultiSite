@@ -1,0 +1,3509 @@
+<script>
+        (function() {
+            'use strict';
+
+            // ==================== CONSTANTS ====================
+            const STORAGE_KEYS = {
+                ASSESSMENTS: 'ecosystem_assessments',
+                SPECIES: 'ecosystem_species',
+                ACTIVITIES: 'ecosystem_activities',
+                MONITORING: 'ecosystem_monitoring',
+                REPORTS: 'ecosystem_reports',
+                FAUNA_SIGHTINGS: 'ecosystem_fauna_sightings',
+                VEGETATION_SURVEYS: 'ecosystem_vegetation_surveys',
+                COMPLIANCE: 'ecosystem_compliance',
+                SETTINGS: 'ecosystem_settings',
+                SITES: 'ecosystem_sites',
+                SITE_MAPS: 'ecosystem_site_maps' // New key for site-specific map data
+            };
+
+            const HEALTH_RATINGS = ['excellent', 'good', 'fair', 'poor', 'degraded'];
+            const SPECIES_STATUS = ['native', 'introduced', 'weed', 'pest', 'endangered', 'vulnerable', 'threatened'];
+            const ACTIVITY_TYPES = ['weed-control', 'revegetation', 'erosion-control', 'fauna-survey', 'vegetation-survey', 'water-quality', 'other'];
+
+            // Default site map data for each site (can be customized per site)
+            const DEFAULT_SITE_MAPS = {
+                // Format: siteId: { center: [lat, lng], zones: [...], markers: [...] }
+                // We'll generate dynamic defaults based on site index
+            };
+
+            // ==================== INITIAL DATA ====================
+            const db = {
+                assessments: [],
+                species: [],
+                activities: [],
+                monitoring: [],
+                reports: [],
+                faunaSightings: [],
+                vegetationSurveys: [],
+                complianceChecklist: [
+                    { id: 1, requirement: "Identified all relevant legislation", compliant: "", evidence: "", notes: "" },
+                    { id: 2, requirement: "Assessed impacts on protected matters", compliant: "", evidence: "", notes: "" },
+                    { id: 3, requirement: "Obtained necessary permits/approvals", compliant: "", evidence: "", notes: "" },
+                    { id: 4, requirement: "Implemented required protections", compliant: "", evidence: "", notes: "" },
+                    { id: 5, requirement: "Maintained required records", compliant: "", evidence: "", notes: "" }
+                ],
+                sites: [],
+                siteMaps: {}, // Store map data per site
+                settings: {
+                    userProfile: {
+                        name: "John Doe",
+                        email: "john.doe@example.com",
+                        role: "ecologist"
+                    }
+                },
+                currentSiteId: null
+            };
+
+            // ==================== UTILITY FUNCTIONS ====================
+            const Utils = {
+                // Safe JSON parsing
+                parseJSON: function(key, defaultValue) {
+                    try {
+                        const item = localStorage.getItem(key);
+                        return item ? JSON.parse(item) : defaultValue;
+                    } catch (e) {
+                        console.error(`Error parsing ${key}:`, e);
+                        return defaultValue;
+                    }
+                },
+
+                // Save data with error handling
+                saveData: function() {
+                    try {
+                        localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
+                        localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
+                        localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
+                        localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
+                        localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
+                        localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
+                        localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
+                        localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
+                        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
+                        localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
+                        localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
+                        return true;
+                    } catch (e) {
+                        console.error('Error saving data:', e);
+                        this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
+                        return false;
+                    }
+                },
+
+                // Load data from localStorage
+                loadData: function() {
+                    db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
+                    db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
+                    db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
+                    db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
+                    db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
+                    db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
+                    db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
+                    db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
+                    db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
+                    db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
+                    db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
+                },
+
+                // Sanitize HTML to prevent XSS
+                sanitizeHTML: function(str) {
+                    if (!str) return '';
+                    const div = document.createElement('div');
+                    div.textContent = str;
+                    return div.innerHTML;
+                },
+
+                // Format date
+                formatDate: function(dateString) {
+                    if (!dateString) return 'Not specified';
+                    try {
+                        const date = new Date(dateString);
+                        if (isNaN(date.getTime())) return 'Invalid date';
+                        return date.toLocaleDateString('en-AU', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                    } catch (e) {
+                        return dateString;
+                    }
+                },
+
+                // Format date and time
+                formatDateTime: function(dateTimeString) {
+                    if (!dateTimeString) return 'Not specified';
+                    try {
+                        const date = new Date(dateTimeString);
+                        if (isNaN(date.getTime())) return 'Invalid date';
+                        return date.toLocaleDateString('en-AU', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } catch (e) {
+                        return dateTimeString;
+                    }
+                },
+
+                // Capitalize first letter
+                capitalize: function(str) {
+                    if (!str) return '';
+                    return str.charAt(0).toUpperCase() + str.slice(1);
+                },
+
+                // Show toast notification
+                showToast: function(title, message, type = 'success') {
+                    const container = document.getElementById('toastContainer');
+                    if (!container) return;
+
+                    const toastId = 'toast-' + Date.now();
+                    const bgClass = type === 'success' ? 'bg-success' :
+                                   type === 'error' ? 'bg-danger' :
+                                   type === 'warning' ? 'bg-warning' : 'bg-info';
+
+                    const toastHtml = `
+                        <div id="${toastId}" class="toast ${bgClass} text-white fade show" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="toast-header ${bgClass} text-white">
+                                <strong class="me-auto">${Utils.sanitizeHTML(title)}</strong>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                            </div>
+                            <div class="toast-body">
+                                ${Utils.sanitizeHTML(message)}
+                            </div>
+                        </div>
+                    `;
+
+                    container.insertAdjacentHTML('beforeend', toastHtml);
+                    const toastElement = document.getElementById(toastId);
+                    const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+                    toast.show();
+
+                    toastElement.addEventListener('hidden.bs.toast', function() {
+                        this.remove();
+                    });
+                },
+
+                // Show confirmation dialog
+                showConfirmation: function(title, message, onConfirm) {
+                    const modal = new bootstrap.Modal(document.getElementById('modalConfirm'));
+                    document.getElementById('confirmModalBody').innerHTML = this.sanitizeHTML(message);
+                    document.getElementById('modalConfirmLabel').innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${this.sanitizeHTML(title)}`;
+                    
+                    const confirmBtn = document.getElementById('confirmActionBtn');
+                    const newBtn = confirmBtn.cloneNode(true);
+                    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+                    newBtn.id = 'confirmActionBtn';
+                    
+                    newBtn.addEventListener('click', function() {
+                        onConfirm();
+                        modal.hide();
+                    });
+                    
+                    modal.show();
+                },
+
+                // Validate email
+                isValidEmail: function(email) {
+                    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    return re.test(email);
+                },
+
+                // Generate unique ID
+                generateId: function() {
+                    return Date.now() + Math.floor(Math.random() * 1000);
+                },
+
+                // Revoke object URLs to prevent memory leaks
+                revokeObjectURLs: function(urls) {
+                    if (Array.isArray(urls)) {
+                        urls.forEach(url => {
+                            if (url && url.startsWith('blob:')) {
+                                URL.revokeObjectURL(url);
+                            }
+                        });
+                    }
+                },
+
+                // Filter data by current site
+                filterByCurrentSite: function(data) {
+                    if (!db.currentSiteId) return [];
+                    return data.filter(item => item.siteId === db.currentSiteId);
+                },
+
+                // Get current site
+                getCurrentSite: function() {
+                    return db.sites.find(site => site.id === db.currentSiteId);
+                },
+
+                // Generate a deterministic location based on site ID (for consistent map positions)
+                generateSiteLocation: function(siteId) {
+                    // Use site ID to generate pseudo-random but consistent coordinates
+                    // This gives each site a unique but fixed location
+                    const baseLat = -33.4000;
+                    const baseLng = 150.3000;
+                    
+                    // Use site ID to create offset
+                    const idNum = typeof siteId === 'number' ? siteId : 
+                                 (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
+                    
+                    const latOffset = (idNum % 10) * 0.05;
+                    const lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
+                    
+                    return {
+                        center: [baseLat + latOffset, baseLng + lngOffset],
+                        zones: [
+                            {
+                                name: 'Zone 1 - Native Forest',
+                                coords: [
+                                    [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                                    [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                                    [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
+                                ],
+                                color: '#3498db'
+                            },
+                            {
+                                name: 'Zone 2 - Wetland Area',
+                                coords: [
+                                    [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
+                                    [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
+                                    [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
+                                    [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
+                                ],
+                                color: '#27ae60'
+                            },
+                            {
+                                name: 'Zone 3 - Weed Control Area',
+                                coords: [
+                                    [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
+                                    [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
+                                ],
+                                color: '#e74c3c'
+                            }
+                        ],
+                        vegetationMarkers: [
+                            { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
+                            { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
+                            { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
+                        ],
+                        weedMarkers: [
+                            { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
+                            { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
+                            { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
+                        ]
+                    };
+                },
+
+                // Get health indicator data for a site based on assessments
+                getSiteHealthData: function(siteId) {
+                    const siteAssessments = db.assessments.filter(a => a.siteId === siteId);
+                    
+                    // Default health values
+                    let healthData = {
+                        biodiversity: 78,
+                        nativeCover: 65,
+                        weedPressure: 22,
+                        erosion: 15,
+                        faunaActivity: 70,
+                        waterQuality: 85,
+                        previousBiodiversity: 72,
+                        previousNativeCover: 60,
+                        previousWeedPressure: 28,
+                        previousErosion: 18,
+                        previousFaunaActivity: 65,
+                        previousWaterQuality: 80
+                    };
+                    
+                    // If there are assessments, calculate health metrics
+                    if (siteAssessments.length > 0) {
+                        // Sort by date
+                        const sorted = siteAssessments.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        const latest = sorted[0];
+                        const previous = sorted[1] || sorted[0]; // Use same if only one
+                        
+                        // Calculate health scores based on assessment health rating
+                        const healthScore = (health) => {
+                            switch(health) {
+                                case 'excellent': return 90;
+                                case 'good': return 75;
+                                case 'fair': return 55;
+                                case 'poor': return 30;
+                                case 'degraded': return 15;
+                                default: return 50;
+                            }
+                        };
+                        
+                        const latestScore = healthScore(latest.health);
+                        const previousScore = healthScore(previous.health);
+                        
+                        // Adjust metrics based on health score and threats
+                        healthData = {
+                            biodiversity: latestScore,
+                            nativeCover: latestScore - (latest.threats.includes('weeds') ? 10 : 0),
+                            weedPressure: 100 - latestScore + (latest.threats.includes('weeds') ? 20 : 10),
+                            erosion: latest.threats.includes('erosion') ? 40 : 15,
+                            faunaActivity: latestScore - 5,
+                            waterQuality: latest.components.includes('water') ? latestScore : 70,
+                            previousBiodiversity: previousScore,
+                            previousNativeCover: previousScore - (previous.threats.includes('weeds') ? 10 : 0),
+                            previousWeedPressure: 100 - previousScore + (previous.threats.includes('weeds') ? 20 : 10),
+                            previousErosion: previous.threats.includes('erosion') ? 40 : 15,
+                            previousFaunaActivity: previousScore - 5,
+                            previousWaterQuality: previous.components.includes('water') ? previousScore : 70
+                        };
+                        
+                        // Ensure values are within 0-100
+                        Object.keys(healthData).forEach(key => {
+                            healthData[key] = Math.min(100, Math.max(0, healthData[key]));
+                        });
+                    }
+                    
+                    return healthData;
+                }
+            };
+
+            // ==================== SITE MANAGEMENT FUNCTIONS ====================
+            const SiteManager = {
+                // Initialize sites
+                initSites: function() {
+                    // Migrate old data if needed
+                    const oldSettings = Utils.parseJSON(STORAGE_KEYS.SETTINGS, null);
+                    
+                    if (db.sites.length === 0 && oldSettings && oldSettings.siteName) {
+                        // Create default site from old settings
+                        const defaultSite = {
+                            id: Utils.generateId(),
+                            name: oldSettings.siteName || "Default Site",
+                            location: oldSettings.siteLocation || "Unknown",
+                            area: oldSettings.siteArea || 0,
+                            description: oldSettings.siteDescription || "",
+                            createdAt: new Date().toISOString()
+                        };
+                        
+                        db.sites.push(defaultSite);
+                        
+                        // Create default map data for this site
+                        db.siteMaps[defaultSite.id] = Utils.generateSiteLocation(defaultSite.id);
+                        
+                        // Assign all existing records to default site
+                        const siteId = defaultSite.id;
+                        
+                        db.assessments = db.assessments.map(item => ({ ...item, siteId }));
+                        db.species = db.species.map(item => ({ ...item, siteId }));
+                        db.activities = db.activities.map(item => ({ ...item, siteId }));
+                        db.monitoring = db.monitoring.map(item => ({ ...item, siteId }));
+                        db.reports = db.reports.map(item => ({ ...item, siteId }));
+                        db.faunaSightings = db.faunaSightings.map(item => ({ ...item, siteId }));
+                        db.vegetationSurveys = db.vegetationSurveys.map(item => ({ ...item, siteId }));
+                        
+                        db.currentSiteId = siteId;
+                        
+                        Utils.saveData();
+                    } else if (db.sites.length > 0 && !db.currentSiteId) {
+                        // Set current site to first site
+                        db.currentSiteId = db.sites[0].id;
+                        
+                        // Ensure each site has map data
+                        db.sites.forEach(site => {
+                            if (!db.siteMaps[site.id]) {
+                                db.siteMaps[site.id] = Utils.generateSiteLocation(site.id);
+                            }
+                        });
+                    }
+                    
+                    this.loadSiteSelector();
+                },
+
+                // Load site selector dropdown
+                loadSiteSelector: function() {
+                    const selector = document.getElementById('siteSelector');
+                    const currentSiteName = document.getElementById('currentSiteName');
+                    
+                    if (!selector) return;
+                    
+                    selector.innerHTML = '';
+                    
+                    if (db.sites.length === 0) {
+                        selector.innerHTML = '<option value="">No sites</option>';
+                        if (currentSiteName) currentSiteName.textContent = 'No site selected';
+                        return;
+                    }
+                    
+                    db.sites.forEach(site => {
+                        const option = document.createElement('option');
+                        option.value = site.id;
+                        option.textContent = site.name;
+                        if (site.id === db.currentSiteId) {
+                            option.selected = true;
+                            if (currentSiteName) currentSiteName.textContent = site.name;
+                            
+                            // Update all site badges
+                            document.querySelectorAll('.site-badge').forEach(badge => {
+                                badge.textContent = site.name;
+                            });
+                            
+                            // Update site name in headers
+                            document.getElementById('dashboardSiteName').textContent = site.name;
+                        }
+                        selector.appendChild(option);
+                    });
+                    
+                    this.updateSitesTable();
+                },
+
+                // Update sites table in manage sites modal
+                updateSitesTable: function() {
+                    const table = document.getElementById('sitesTable');
+                    const noSitesMsg = document.getElementById('noSitesMessage');
+                    
+                    if (!table) return;
+                    
+                    const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
+                    tbody.innerHTML = '';
+                    
+                    if (db.sites.length === 0) {
+                        table.style.display = 'none';
+                        if (noSitesMsg) noSitesMsg.style.display = 'block';
+                        return;
+                    }
+                    
+                    table.style.display = 'table';
+                    if (noSitesMsg) noSitesMsg.style.display = 'none';
+                    
+                    db.sites.forEach(site => {
+                        const row = tbody.insertRow();
+                        
+                        // Count records for this site
+                        const recordCount = db.assessments.filter(a => a.siteId === site.id).length +
+                                           db.species.filter(s => s.siteId === site.id).length +
+                                           db.activities.filter(a => a.siteId === site.id).length +
+                                           db.monitoring.filter(m => m.siteId === site.id).length;
+                        
+                        row.innerHTML = `
+                            <td>${Utils.sanitizeHTML(site.name)}</td>
+                            <td>${Utils.sanitizeHTML(site.location)}</td>
+                            <td>${site.area} ha</td>
+                            <td>${Utils.formatDate(site.createdAt)}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn btn-sm btn-outline-primary edit-site" data-id="${site.id}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger delete-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    ${site.id !== db.currentSiteId ? `
+                                    <button class="btn btn-sm btn-outline-success switch-to-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                        <i class="bi bi-arrow-right-circle"></i>
+                                    </button>
+                                    ` : ''}
+                                    <button class="btn btn-sm btn-outline-info configure-map" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                        <i class="bi bi-geo-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        `;
+                    });
+                    
+                    // Add event listeners
+                    document.querySelectorAll('.edit-site').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const site = db.sites.find(s => s.id === id);
+                            if (site) this.showEditSiteModal(site);
+                        });
+                    });
+                    
+                    document.querySelectorAll('.delete-site').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const name = btn.dataset.name;
+                            this.confirmDeleteSite(id, name);
+                        });
+                    });
+                    
+                    document.querySelectorAll('.switch-to-site').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const name = btn.dataset.name;
+                            this.promptSwitchSite(id, name);
+                        });
+                    });
+                    
+                    document.querySelectorAll('.configure-map').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const name = btn.dataset.name;
+                            this.showMapConfigModal(id, name);
+                        });
+                    });
+                },
+
+                // Show map configuration modal
+                showMapConfigModal: function(siteId, siteName) {
+                    const mapData = db.siteMaps[siteId] || Utils.generateSiteLocation(siteId);
+                    
+                    // Create a simple prompt for now - in a real app, you'd have a full map editor
+                    const lat = prompt(`Enter latitude for ${siteName}:`, mapData.center[0]);
+                    if (lat !== null) {
+                        const lng = prompt(`Enter longitude for ${siteName}:`, mapData.center[1]);
+                        if (lng !== null) {
+                            mapData.center = [parseFloat(lat) || mapData.center[0], parseFloat(lng) || mapData.center[1]];
+                            db.siteMaps[siteId] = mapData;
+                            Utils.saveData();
+                            Utils.showToast('Success', `Map location updated for ${siteName}`);
+                            
+                            // If this is the current site, refresh the map
+                            if (siteId === db.currentSiteId && window.map) {
+                                App.updateMapForCurrentSite();
+                            }
+                        }
+                    }
+                },
+
+                // Show edit site modal
+                showEditSiteModal: function(site) {
+                    document.getElementById('editSiteId').value = site.id;
+                    document.getElementById('editSiteName').value = site.name;
+                    document.getElementById('editSiteLocation').value = site.location;
+                    document.getElementById('editSiteArea').value = site.area;
+                    document.getElementById('editSiteDescription').value = site.description;
+                    
+                    new bootstrap.Modal(document.getElementById('modalEditSite')).show();
+                },
+
+                // Update site
+                updateSite: function() {
+                    const form = document.getElementById('formEditSite');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+                    
+                    const id = parseInt(document.getElementById('editSiteId').value);
+                    const site = db.sites.find(s => s.id === id);
+                    
+                    if (site) {
+                        site.name = document.getElementById('editSiteName').value;
+                        site.location = document.getElementById('editSiteLocation').value;
+                        site.area = parseFloat(document.getElementById('editSiteArea').value);
+                        site.description = document.getElementById('editSiteDescription').value;
+                        
+                        if (Utils.saveData()) {
+                            form.reset();
+                            form.classList.remove('was-validated');
+                            bootstrap.Modal.getInstance(document.getElementById('modalEditSite')).hide();
+                            Utils.showToast('Success', 'Site updated successfully');
+                            
+                            this.loadSiteSelector();
+                            
+                            // If current site was updated, refresh UI
+                            if (id === db.currentSiteId) {
+                                App.loadAllData();
+                            }
+                        }
+                    }
+                },
+
+                // Save new site
+                saveSite: function() {
+                    const form = document.getElementById('formNewSite');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+                    
+                    const newSite = {
+                        id: Utils.generateId(),
+                        name: document.getElementById('siteName').value,
+                        location: document.getElementById('siteLocation').value,
+                        area: parseFloat(document.getElementById('siteArea').value),
+                        description: document.getElementById('siteDescription').value,
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    db.sites.push(newSite);
+                    
+                    // Create default map data for new site
+                    db.siteMaps[newSite.id] = Utils.generateSiteLocation(newSite.id);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewSite')).hide();
+                        Utils.showToast('Success', 'Site created successfully');
+                        
+                        this.loadSiteSelector();
+                        
+                        // If this is the first site, set as current
+                        if (db.sites.length === 1) {
+                            db.currentSiteId = newSite.id;
+                            this.loadSiteSelector();
+                            App.loadAllData();
+                        }
+                    }
+                },
+
+                // Confirm delete site
+                confirmDeleteSite: function(siteId, siteName) {
+                    Utils.showConfirmation(
+                        'Delete Site',
+                        `Are you sure you want to delete "${siteName}"? This will permanently delete all data associated with this site.`,
+                        () => this.deleteSite(siteId)
+                    );
+                },
+
+                // Delete site
+                deleteSite: function(siteId) {
+                    // Remove site from array
+                    db.sites = db.sites.filter(s => s.id !== siteId);
+                    
+                    // Remove map data for this site
+                    delete db.siteMaps[siteId];
+                    
+                    // Remove all data associated with this site
+                    db.assessments = db.assessments.filter(a => a.siteId !== siteId);
+                    db.species = db.species.filter(s => s.siteId !== siteId);
+                    db.activities = db.activities.filter(a => a.siteId !== siteId);
+                    db.monitoring = db.monitoring.filter(m => m.siteId !== siteId);
+                    db.reports = db.reports.filter(r => r.siteId !== siteId);
+                    db.faunaSightings = db.faunaSightings.filter(f => f.siteId !== siteId);
+                    db.vegetationSurveys = db.vegetationSurveys.filter(v => v.siteId !== siteId);
+                    
+                    // If current site was deleted, switch to another site
+                    if (db.currentSiteId === siteId) {
+                        db.currentSiteId = db.sites.length > 0 ? db.sites[0].id : null;
+                    }
+                    
+                    if (Utils.saveData()) {
+                        Utils.showToast('Success', 'Site deleted successfully');
+                        this.loadSiteSelector();
+                        App.loadAllData();
+                    }
+                },
+
+                // Prompt switch site
+                promptSwitchSite: function(siteId, siteName) {
+                    document.getElementById('switchTargetSiteId').value = siteId;
+                    document.getElementById('switchTargetSiteName').textContent = siteName;
+                    new bootstrap.Modal(document.getElementById('modalSwitchSite')).show();
+                },
+
+                // Switch site
+                switchSite: function(siteId) {
+                    // Save current data first
+                    Utils.saveData();
+                    
+                    db.currentSiteId = siteId;
+                    
+                    // Update UI
+                    this.loadSiteSelector();
+                    App.populateModalSiteIds();
+                    App.loadAllData();
+                    
+                    // Update map for new site
+                    if (window.map) {
+                        App.updateMapForCurrentSite();
+                    }
+                    
+                    // Hide modal
+                    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
+                    
+                    Utils.showToast('Success', 'Switched to ' + db.sites.find(s => s.id === siteId).name);
+                }
+            };
+
+            // ==================== CORE FUNCTIONS ====================
+            const App = {
+                // Initialize the application
+                init: function() {
+                    Utils.loadData();
+                    SiteManager.initSites();
+                    this.loadInitialData();
+                    
+                    // Wait for DOM and libraries to load
+                    setTimeout(() => {
+                        this.initCharts();
+                        this.initMap();
+                        this.initCalendar();
+                        this.populateModalSiteIds();
+                        this.loadAllData();
+                        this.setupEventListeners();
+                        this.updateStorageInfo();
+                    }, 500);
+                },
+
+                // Populate site IDs in all modal forms
+                populateModalSiteIds: function() {
+                    // Set site ID in all modal forms
+                    document.getElementById('activitySiteId').value = db.currentSiteId || '';
+                    document.getElementById('assessmentSiteId').value = db.currentSiteId || '';
+                    document.getElementById('speciesSiteId').value = db.currentSiteId || '';
+                    document.getElementById('monitoringSiteId').value = db.currentSiteId || '';
+                    document.getElementById('faunaSiteId').value = db.currentSiteId || '';
+                    document.getElementById('vegetationSiteId').value = db.currentSiteId || '';
+                },
+
+                // Load all data for current site
+                loadAllData: function() {
+                    this.loadDashboard();
+                    this.loadAssessments();
+                    this.loadSpecies();
+                    this.loadActivities();
+                    this.loadMonitoring();
+                    this.loadReports();
+                    this.loadComplianceChecklist();
+                    this.loadSettings();
+                    this.populateModalSiteIds();
+                    
+                    // Refresh calendar
+                    if (window.calendar) {
+                        window.calendar.refetchEvents();
+                    }
+                    
+                    // Refresh health chart with site data
+                    this.updateHealthChart();
+                },
+
+                // Update health chart with current site data
+                updateHealthChart: function() {
+                    if (!window.healthChart) return;
+                    
+                    const healthData = Utils.getSiteHealthData(db.currentSiteId);
+                    
+                    window.healthChart.data.datasets[0].data = [
+                        healthData.biodiversity,
+                        healthData.nativeCover,
+                        healthData.weedPressure,
+                        healthData.erosion,
+                        healthData.faunaActivity,
+                        healthData.waterQuality
+                    ];
+                    
+                    window.healthChart.data.datasets[1].data = [
+                        healthData.previousBiodiversity,
+                        healthData.previousNativeCover,
+                        healthData.previousWeedPressure,
+                        healthData.previousErosion,
+                        healthData.previousFaunaActivity,
+                        healthData.previousWaterQuality
+                    ];
+                    
+                    window.healthChart.update();
+                    
+                    // Update health indicators text
+                    const indicatorsDiv = document.getElementById('healthIndicators');
+                    if (indicatorsDiv) {
+                        const site = Utils.getCurrentSite();
+                        indicatorsDiv.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Health data based on ${Utils.filterByCurrentSite(db.assessments).length} assessment(s) for ${site ? site.name : 'this site'}.
+                            </div>
+                        `;
+                    }
+                },
+
+                // Load initial test data if empty (with site IDs)
+                loadInitialData: function() {
+                    if (db.sites.length === 0) {
+                        // Create default site
+                        const defaultSite = {
+                            id: Utils.generateId(),
+                            name: "Blue Mountains Conservation Area",
+                            location: "NSW, Australia",
+                            area: 125,
+                            description: "Mixed eucalypt forest with significant biodiversity values including several threatened species.",
+                            createdAt: new Date().toISOString()
+                        };
+                        db.sites.push(defaultSite);
+                        
+                        // Create map data for default site
+                        db.siteMaps[defaultSite.id] = Utils.generateSiteLocation(defaultSite.id);
+                        
+                        db.currentSiteId = defaultSite.id;
+                    }
+                    
+                    const siteId = db.currentSiteId || (db.sites.length > 0 ? db.sites[0].id : null);
+                    
+                    // Ensure all sites have map data
+                    db.sites.forEach(site => {
+                        if (!db.siteMaps[site.id]) {
+                            db.siteMaps[site.id] = Utils.generateSiteLocation(site.id);
+                        }
+                    });
+                    
+                    if (db.assessments.length === 0) {
+                        db.assessments = [
+                            {
+                                id: 1,
+                                siteId: siteId,
+                                date: '2023-06-15',
+                                assessor: 'Jane Doe',
+                                description: 'Initial assessment of the northern section of the conservation area. Found healthy native vegetation but some weed infestations.',
+                                components: ['flora', 'fauna', 'soil'],
+                                health: 'good',
+                                threats: ['weeds', 'erosion'],
+                                photos: [],
+                                createdAt: '2023-06-15T10:30:00Z'
+                            },
+                            {
+                                id: 2,
+                                siteId: siteId,
+                                date: '2023-03-02',
+                                assessor: 'John Smith',
+                                description: 'Quarterly assessment of the entire site. Noted increased weed coverage in Zone 3.',
+                                components: ['flora', 'fauna', 'water'],
+                                health: 'fair',
+                                threats: ['weeds', 'pests'],
+                                photos: [],
+                                createdAt: '2023-03-02T14:15:00Z'
+                            }
+                        ];
+                    }
+
+                    if (db.species.length === 0) {
+                        db.species = [
+                            {
+                                id: 1,
+                                siteId: siteId,
+                                scientificName: 'Eucalyptus pauciflora',
+                                commonName: 'Snow Gum',
+                                type: 'flora',
+                                status: 'native',
+                                description: 'A small to medium-sized tree with smooth bark, native to southeastern Australia.',
+                                habitat: 'Alpine and subalpine areas',
+                                lastObserved: '2023-06-15',
+                                image: '',
+                                notes: 'Dominant species in Zone 1',
+                                createdAt: '2023-01-10T09:20:00Z'
+                            },
+                            {
+                                id: 2,
+                                siteId: siteId,
+                                scientificName: 'Rubus fruticosus',
+                                commonName: 'Blackberry',
+                                type: 'flora',
+                                status: 'weed',
+                                description: 'Invasive shrub with thorny stems and edible black berries.',
+                                habitat: 'Disturbed areas, forest edges',
+                                lastObserved: '2023-06-10',
+                                image: '',
+                                notes: 'Expanding in Zone 3, requires control',
+                                createdAt: '2023-02-15T11:45:00Z'
+                            },
+                            {
+                                id: 3,
+                                siteId: siteId,
+                                scientificName: 'Phascolarctos cinereus',
+                                commonName: 'Koala',
+                                type: 'fauna',
+                                status: 'endangered',
+                                description: 'Arboreal herbivorous marsupial native to Australia.',
+                                habitat: 'Eucalyptus forests',
+                                lastObserved: '2023-06-05',
+                                image: '',
+                                notes: 'Single individual observed in Zone 1',
+                                createdAt: '2023-03-20T08:30:00Z'
+                            }
+                        ];
+                    }
+
+                    if (db.activities.length === 0) {
+                        db.activities = [
+                            {
+                                id: 1,
+                                siteId: siteId,
+                                type: 'weed-control',
+                                title: 'Weed Control - Blackberry',
+                                startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                                endDate: null,
+                                location: 'Zone 3',
+                                description: 'Target species: Blackberry. Manual removal and herbicide application.',
+                                assignedTo: 'John Smith',
+                                priority: 'high',
+                                status: 'planned',
+                                notes: 'Wear protective clothing due to thorns',
+                                createdAt: new Date().toISOString()
+                            },
+                            {
+                                id: 2,
+                                siteId: siteId,
+                                type: 'fauna-survey',
+                                title: 'Fauna Survey - Eastern Zone',
+                                startDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                                endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(),
+                                location: 'Eastern Zone',
+                                description: 'Standardized survey of fauna species in the eastern section.',
+                                assignedTo: 'Survey Team',
+                                priority: 'medium',
+                                status: 'planned',
+                                notes: 'Focus on threatened species',
+                                createdAt: new Date().toISOString()
+                            },
+                            {
+                                id: 3,
+                                siteId: siteId,
+                                type: 'revegetation',
+                                title: 'Revegetation Planting',
+                                startDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+                                endDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000 + 6 * 60 * 60 * 1000).toISOString(),
+                                location: 'Zone 1',
+                                description: 'Planting 200 native shrubs in previously cleared area.',
+                                assignedTo: 'Volunteer Group',
+                                priority: 'medium',
+                                status: 'planned',
+                                notes: 'Species: Acacia and Banksia',
+                                createdAt: new Date().toISOString()
+                            },
+                            {
+                                id: 4,
+                                siteId: siteId,
+                                type: 'erosion-control',
+                                title: 'Erosion Control - North Bank',
+                                startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+                                endDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(),
+                                location: 'Northern Boundary',
+                                description: 'Install erosion control matting and plant stabilizing vegetation.',
+                                assignedTo: 'Grounds Team',
+                                priority: 'high',
+                                status: 'completed',
+                                notes: 'Completed on schedule',
+                                createdAt: new Date().toISOString()
+                            }
+                        ];
+                    }
+
+                    if (db.monitoring.length === 0) {
+                        db.monitoring = [
+                            {
+                                id: 1,
+                                siteId: siteId,
+                                type: 'vegetation-survey',
+                                date: '2023-06-15',
+                                location: 'Zone 1',
+                                observer: 'Jane Doe',
+                                findings: 'Increased native cover compared to last survey. Weed cover reduced by 15%.',
+                                species: [1],
+                                photos: [],
+                                notes: 'Positive trend in vegetation recovery',
+                                createdAt: '2023-06-15T16:45:00Z'
+                            },
+                            {
+                                id: 2,
+                                siteId: siteId,
+                                type: 'fauna-survey',
+                                date: '2023-06-12',
+                                location: 'Eastern Zone',
+                                observer: 'Survey Team',
+                                findings: 'Koala sighting confirmed. Also observed several bird species including bush stone-curlew.',
+                                species: [3],
+                                photos: [],
+                                notes: 'First confirmed koala sighting in 2 years',
+                                createdAt: '2023-06-12T17:30:00Z'
+                            }
+                        ];
+                    }
+
+                    if (db.reports.length === 0) {
+                        db.reports = [
+                            {
+                                id: 1,
+                                siteId: siteId,
+                                type: 'compliance',
+                                date: new Date().toISOString(),
+                                generatedBy: 'Jane Doe',
+                                period: 'All time',
+                                content: {
+                                    title: 'Compliance Report',
+                                    body: 'Report generated for ' + (Utils.getCurrentSite()?.name || 'site'),
+                                    progress: 60,
+                                    checklist: db.complianceChecklist
+                                },
+                                format: 'pdf',
+                                createdAt: new Date().toISOString()
+                            }
+                        ];
+                    }
+
+                    Utils.saveData();
+                },
+
+                // Update storage information
+                updateStorageInfo: function() {
+                    try {
+                        let totalSize = 0;
+                        Object.keys(STORAGE_KEYS).forEach(key => {
+                            const item = localStorage.getItem(STORAGE_KEYS[key]);
+                            if (item) totalSize += item.length * 2;
+                        });
+
+                        const currentSiteData = Utils.filterByCurrentSite(db.assessments).length +
+                                               Utils.filterByCurrentSite(db.species).length +
+                                               Utils.filterByCurrentSite(db.activities).length +
+                                               Utils.filterByCurrentSite(db.monitoring).length +
+                                               Utils.filterByCurrentSite(db.reports).length;
+
+                        document.getElementById('storageUsed').textContent = 
+                            totalSize > 1024 * 1024 ? `${(totalSize / (1024 * 1024)).toFixed(2)} MB` :
+                            totalSize > 1024 ? `${(totalSize / 1024).toFixed(2)} KB` : `${totalSize} bytes`;
+                        
+                        document.getElementById('recordsCount').textContent = currentSiteData;
+                        document.getElementById('sitesCount').textContent = db.sites.length;
+                        document.getElementById('lastBackupInfo').textContent = 
+                            localStorage.getItem('lastBackup') || 'Never';
+                    } catch (e) {
+                        console.error('Error calculating storage:', e);
+                    }
+                },
+
+                // ==================== CHART FUNCTIONS ====================
+                initCharts: function() {
+                    // Health Chart
+                    const healthCtx = document.getElementById('healthChart');
+                    if (healthCtx) {
+                        try {
+                            const healthData = Utils.getSiteHealthData(db.currentSiteId);
+                            
+                            window.healthChart = new Chart(healthCtx, {
+                                type: 'radar',
+                                data: {
+                                    labels: ['Biodiversity', 'Native Cover', 'Weed Pressure', 'Erosion', 'Fauna Activity', 'Water Quality'],
+                                    datasets: [{
+                                        label: 'Current',
+                                        data: [
+                                            healthData.biodiversity,
+                                            healthData.nativeCover,
+                                            healthData.weedPressure,
+                                            healthData.erosion,
+                                            healthData.faunaActivity,
+                                            healthData.waterQuality
+                                        ],
+                                        backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                                        borderColor: 'rgba(40, 167, 69, 1)',
+                                        borderWidth: 1,
+                                        pointBackgroundColor: 'rgba(40, 167, 69, 1)'
+                                    }, {
+                                        label: 'Previous',
+                                        data: [
+                                            healthData.previousBiodiversity,
+                                            healthData.previousNativeCover,
+                                            healthData.previousWeedPressure,
+                                            healthData.previousErosion,
+                                            healthData.previousFaunaActivity,
+                                            healthData.previousWaterQuality
+                                        ],
+                                        backgroundColor: 'rgba(108, 117, 125, 0.2)',
+                                        borderColor: 'rgba(108, 117, 125, 1)',
+                                        borderWidth: 1,
+                                        pointBackgroundColor: 'rgba(108, 117, 125, 1)'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    scales: {
+                                        r: {
+                                            beginAtZero: true,
+                                            max: 100,
+                                            ticks: {
+                                                stepSize: 20
+                                            }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: {
+                                            position: 'bottom'
+                                        }
+                                    }
+                                }
+                            });
+                        } catch (e) {
+                            console.error('Error creating health chart:', e);
+                        }
+                    }
+
+                    // Fauna Chart
+                    const faunaCtx = document.getElementById('faunaChart');
+                    if (faunaCtx) {
+                        try {
+                            window.faunaChart = new Chart(faunaCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                                    datasets: [{
+                                        label: 'Koala',
+                                        data: [2, 3, 1, 4, 3, 2],
+                                        borderColor: 'rgba(220, 53, 69, 1)',
+                                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                        tension: 0.1,
+                                        fill: true
+                                    }, {
+                                        label: 'Bush Stone-curlew',
+                                        data: [5, 4, 6, 3, 5, 7],
+                                        borderColor: 'rgba(255, 193, 7, 1)',
+                                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                        tension: 0.1,
+                                        fill: true
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top',
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                stepSize: 1
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        } catch (e) {
+                            console.error('Error creating fauna chart:', e);
+                        }
+                    }
+
+                    // Vegetation Chart
+                    const vegetationCtx = document.getElementById('vegetationChart');
+                    if (vegetationCtx) {
+                        try {
+                            window.vegetationChart = new Chart(vegetationCtx, {
+                                type: 'bar',
+                                data: {
+                                    labels: ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4'],
+                                    datasets: [{
+                                        label: 'Native Cover (%)',
+                                        data: [75, 60, 45, 80],
+                                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                                    }, {
+                                        label: 'Weed Cover (%)',
+                                        data: [15, 25, 40, 10],
+                                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top',
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            max: 100
+                                        }
+                                    }
+                                }
+                            });
+                        } catch (e) {
+                            console.error('Error creating vegetation chart:', e);
+                        }
+                    }
+                },
+
+                // ==================== MAP FUNCTIONS ====================
+                initMap: function() {
+                    const mapElement = document.getElementById('map');
+                    if (!mapElement) return;
+
+                    try {
+                        if (typeof L === 'undefined') {
+                            mapElement.innerHTML = '<div class="alert alert-warning">Map library could not be loaded. Please check your internet connection.</div>';
+                            return;
+                        }
+
+                        // Initialize map with current site data
+                        this.updateMapForCurrentSite();
+
+                    } catch (error) {
+                        console.error('Error initializing map:', error);
+                        mapElement.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please refresh the page.</div>';
+                    }
+                },
+
+                updateMapForCurrentSite: function() {
+                    const mapElement = document.getElementById('map');
+                    if (!mapElement) return;
+                    
+                    const siteId = db.currentSiteId;
+                    const site = Utils.getCurrentSite();
+                    
+                    if (!site) {
+                        mapElement.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+                        return;
+                    }
+                    
+                    // Get map data for this site
+                    let mapData = db.siteMaps[siteId];
+                    if (!mapData) {
+                        mapData = Utils.generateSiteLocation(siteId);
+                        db.siteMaps[siteId] = mapData;
+                    }
+                    
+                    try {
+                        // Remove existing map if it exists
+                        if (window.map) {
+                            window.map.remove();
+                        }
+                        
+                        // Create new map
+                        window.map = L.map('map').setView(mapData.center, 13);
+
+                        // Add tile layer
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                            maxZoom: 19
+                        }).addTo(window.map);
+
+                        // Add marker for site
+                        const marker = L.marker(mapData.center).addTo(window.map)
+                            .bindPopup(site.name)
+                            .openPopup();
+
+                        // Create zone polygons
+                        window.zonesLayer = L.layerGroup();
+                        window.vegetationLayer = L.layerGroup();
+                        window.weedsLayer = L.layerGroup();
+                        
+                        // Add zones
+                        mapData.zones.forEach(zone => {
+                            const polygon = L.polygon(zone.coords, {
+                                color: zone.color,
+                                weight: 2,
+                                opacity: 0.8,
+                                fillOpacity: 0.2
+                            }).bindPopup(zone.name);
+                            
+                            window.zonesLayer.addLayer(polygon);
+                        });
+                        
+                        // Add vegetation markers
+                        mapData.vegetationMarkers.forEach(markerData => {
+                            const m = L.marker(markerData.coords).bindPopup(markerData.name);
+                            window.vegetationLayer.addLayer(m);
+                        });
+                        
+                        // Add weed markers
+                        mapData.weedMarkers.forEach(markerData => {
+                            const m = L.marker(markerData.coords).bindPopup(markerData.name);
+                            window.weedsLayer.addLayer(m);
+                        });
+
+                        // Default to showing zones
+                        window.zonesLayer.addTo(window.map);
+                        
+                        // Reset toggle button states
+                        document.getElementById('zoneToggle')?.classList.add('active');
+                        document.getElementById('zoneToggle')?.setAttribute('aria-pressed', 'true');
+                        document.getElementById('vegetationToggle')?.classList.remove('active');
+                        document.getElementById('vegetationToggle')?.setAttribute('aria-pressed', 'false');
+                        document.getElementById('weedsToggle')?.classList.remove('active');
+                        document.getElementById('weedsToggle')?.setAttribute('aria-pressed', 'false');
+                        
+                    } catch (error) {
+                        console.error('Error updating map:', error);
+                        mapElement.innerHTML = '<div class="alert alert-warning">Map could not be updated.</div>';
+                    }
+                },
+
+                // ==================== CALENDAR FUNCTIONS ====================
+                initCalendar: function() {
+                    const calendarEl = document.getElementById('calendar');
+                    if (!calendarEl) return;
+
+                    try {
+                        if (typeof FullCalendar === 'undefined') {
+                            calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                            return;
+                        }
+
+                        const events = Utils.filterByCurrentSite(db.activities).map(activity => ({
+                            id: activity.id.toString(),
+                            title: activity.title,
+                            start: activity.startDate,
+                            end: activity.endDate || activity.startDate,
+                            extendedProps: {
+                                type: activity.type,
+                                location: activity.location,
+                                assignedTo: activity.assignedTo,
+                                status: activity.status
+                            },
+                            backgroundColor: this.getActivityColor(activity.type),
+                            borderColor: this.getActivityColor(activity.type),
+                            textColor: '#fff'
+                        }));
+
+                        window.calendar = new FullCalendar.Calendar(calendarEl, {
+                            initialView: 'dayGridMonth',
+                            headerToolbar: {
+                                left: 'prev,next today',
+                                center: 'title',
+                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                            },
+                            events: events,
+                            eventClick: function(info) {
+                                const activity = db.activities.find(a => a.id.toString() === info.event.id);
+                                if (activity) {
+                                    App.showActivityDetails(activity);
+                                }
+                            },
+                            eventDidMount: function(info) {
+                                // Add tooltip
+                                info.el.setAttribute('title', 
+                                    `${info.event.title}\nType: ${info.event.extendedProps.type}\nLocation: ${info.event.extendedProps.location}`
+                                );
+                            },
+                            height: 600,
+                            stickyHeaderDates: true
+                        });
+
+                        window.calendar.render();
+                    } catch (error) {
+                        console.error('Error initializing calendar:', error);
+                        calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                    }
+                },
+
+                getActivityColor: function(type) {
+                    const colors = {
+                        'weed-control': '#dc3545',
+                        'revegetation': '#28a745',
+                        'erosion-control': '#fd7e14',
+                        'fauna-survey': '#17a2b8',
+                        'vegetation-survey': '#20c997',
+                        'water-quality': '#007bff'
+                    };
+                    return colors[type] || '#6c757d';
+                },
+
+                // ==================== DASHBOARD FUNCTIONS ====================
+                loadDashboard: function() {
+                    const currentSite = Utils.getCurrentSite();
+                    const filteredAssessments = Utils.filterByCurrentSite(db.assessments);
+                    const filteredSpecies = Utils.filterByCurrentSite(db.species);
+                    const filteredActivities = Utils.filterByCurrentSite(db.activities);
+                    const filteredMonitoring = Utils.filterByCurrentSite(db.monitoring);
+
+                    // Update stats
+                    const upcomingTasks = filteredActivities.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
+                    document.getElementById('totalTasks').textContent = upcomingTasks.length;
+                    document.getElementById('totalAssessments').textContent = filteredAssessments.length;
+                    document.getElementById('totalSpecies').textContent = filteredSpecies.length;
+
+                    const completedItems = db.complianceChecklist.filter(item => item.compliant === 'Yes').length;
+                    const totalItems = db.complianceChecklist.length;
+                    const progress = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
+                    document.getElementById('compliancePercent').textContent = `${progress}%`;
+
+                    // Upcoming tasks list
+                    const tasksList = document.getElementById('upcomingTasksList');
+                    if (tasksList) {
+                        tasksList.innerHTML = '';
+
+                        if (upcomingTasks.length === 0) {
+                            tasksList.innerHTML = `
+                                <div class="empty-state">
+                                    <i class="bi bi-check-circle"></i>
+                                    <p>No upcoming tasks for this site</p>
+                                </div>
+                            `;
+                        } else {
+                            upcomingTasks
+                                .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                                .slice(0, 5)
+                                .forEach(task => {
+                                    const item = document.createElement('a');
+                                    item.href = '#';
+                                    item.className = 'list-group-item list-group-item-action';
+                                    item.setAttribute('role', 'listitem');
+                                    item.innerHTML = `
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">${Utils.sanitizeHTML(task.title)}</h6>
+                                            <small class="text-muted">${Utils.formatDate(task.startDate)}</small>
+                                        </div>
+                                        <p class="mb-1">${Utils.sanitizeHTML(task.description.substring(0, 50))}${task.description.length > 50 ? '...' : ''}</p>
+                                        <small class="text-muted">Assigned to: ${Utils.sanitizeHTML(task.assignedTo)}</small>
+                                    `;
+                                    item.addEventListener('click', (e) => {
+                                        e.preventDefault();
+                                        this.showActivityDetails(task);
+                                    });
+                                    tasksList.appendChild(item);
+                                });
+                        }
+                    }
+
+                    // Recent observations
+                    const observationsList = document.getElementById('recentObservationsList');
+                    if (observationsList) {
+                        observationsList.innerHTML = '';
+
+                        const recent = filteredMonitoring
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .slice(0, 4);
+
+                        if (recent.length === 0) {
+                            observationsList.innerHTML = `
+                                <li class="list-group-item empty-state">
+                                    <i class="bi bi-binoculars"></i>
+                                    <p>No recent observations for this site</p>
+                                </li>
+                            `;
+                        } else {
+                            recent.forEach(obs => {
+                                const item = document.createElement('li');
+                                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                                item.setAttribute('role', 'listitem');
+                                item.innerHTML = `
+                                    ${obs.type === 'fauna-survey' ? 'Fauna sighting' : 'Vegetation survey'}
+                                    <span class="badge ${obs.type === 'fauna-survey' ? 'bg-info' : 'bg-success'} rounded-pill">
+                                        ${Utils.formatDate(obs.date)}
+                                    </span>
+                                `;
+                                item.addEventListener('click', () => this.showMonitoringDetails(obs));
+                                observationsList.appendChild(item);
+                            });
+                        }
+                    }
+
+                    // Compliance checklist
+                    const checklistDiv = document.getElementById('dashboardComplianceChecklist');
+                    if (checklistDiv) {
+                        checklistDiv.innerHTML = '';
+
+                        const progressBar = document.getElementById('complianceProgress');
+                        if (progressBar) {
+                            progressBar.style.width = `${progress}%`;
+                            progressBar.textContent = `${progress}% Complete`;
+                            progressBar.setAttribute('aria-valuenow', progress);
+                        }
+
+                        db.complianceChecklist.forEach(item => {
+                            const checkDiv = document.createElement('div');
+                            checkDiv.className = 'form-check mb-2';
+                            checkDiv.innerHTML = `
+                                <input class="form-check-input" type="checkbox" 
+                                       id="dashCheck${item.id}" ${item.compliant === 'Yes' ? 'checked' : ''} disabled>
+                                <label class="form-check-label" for="dashCheck${item.id}">
+                                    ${Utils.sanitizeHTML(item.requirement)}
+                                </label>
+                            `;
+                            checklistDiv.appendChild(checkDiv);
+                        });
+                    }
+                    
+                    // Update health chart
+                    this.updateHealthChart();
+                },
+
+                // ==================== ASSESSMENT FUNCTIONS ====================
+                loadAssessments: function() {
+                    const table = document.getElementById('assessmentsTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const filteredAssessments = Utils.filterByCurrentSite(db.assessments);
+
+                    if (filteredAssessments.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-clipboard-data"></i>
+                                        <p>No assessments recorded for this site</p>
+                                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#modalNewAssessment">
+                                            Create First Assessment
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        filteredAssessments.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(assessment => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Date">${Utils.formatDate(assessment.date)}</td>
+                                <td data-label="Assessor">${Utils.sanitizeHTML(assessment.assessor)}</td>
+                                <td data-label="Health Rating">
+                                    <span class="badge ${this.getHealthBadgeClass(assessment.health)}">
+                                        ${Utils.capitalize(assessment.health)}
+                                    </span>
+                                </td>
+                                <td data-label="Main Threats">${assessment.threats.map(t => Utils.capitalize(t)).join(', ') || 'None'}</td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-assessment" data-id="${assessment.id}">
+                                            <i class="bi bi-eye"></i> View
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    // Add event listeners
+                    document.querySelectorAll('.view-assessment').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const assessment = db.assessments.find(a => a.id === id);
+                            if (assessment) this.showAssessmentDetails(assessment);
+                        });
+                    });
+                },
+
+                saveAssessment: function() {
+                    const form = document.getElementById('formNewAssessment');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        
+                        // Check components
+                        const components = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
+                        if (components.length === 0) {
+                            document.getElementById('componentsFeedback').style.display = 'block';
+                        }
+                        return;
+                    }
+
+                    const components = Array.from(document.querySelectorAll('#formNewAssessment input[name="components"]:checked'))
+                        .map(cb => cb.value);
+                    
+                    if (components.length === 0) {
+                        document.getElementById('componentsFeedback').style.display = 'block';
+                        return;
+                    }
+
+                    const threats = Array.from(document.getElementById('modalThreats').selectedOptions)
+                        .map(opt => opt.value);
+
+                    const newAssessment = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        date: document.getElementById('modalAssessmentDate').value,
+                        assessor: document.getElementById('modalAssessorName').value,
+                        description: document.getElementById('modalSiteDescription').value,
+                        components: components,
+                        health: document.getElementById('modalEcosystemHealth').value,
+                        threats: threats,
+                        photos: [],
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.assessments.push(newAssessment);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        document.getElementById('componentsFeedback').style.display = 'none';
+                        document.getElementById('assessmentPhotoPreview').innerHTML = '';
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewAssessment')).hide();
+                        Utils.showToast('Success', 'Assessment saved successfully!');
+                        
+                        this.loadAssessments();
+                        this.loadDashboard();
+                    }
+                },
+
+                showAssessmentDetails: function(assessment) {
+                    const modalBody = document.getElementById('assessmentModalBody');
+                    if (!modalBody) return;
+
+                    modalBody.innerHTML = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Assessment Date</h6>
+                                <p>${Utils.formatDate(assessment.date)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Assessor</h6>
+                                <p>${Utils.sanitizeHTML(assessment.assessor)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Site Description</h6>
+                            <p>${Utils.sanitizeHTML(assessment.description)}</p>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Ecosystem Components</h6>
+                                <ul class="list-unstyled">
+                                    ${assessment.components.map(c => `<li><i class="bi bi-check-circle-fill text-success me-2"></i>${Utils.capitalize(c)}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Health Assessment</h6>
+                                <span class="badge ${this.getHealthBadgeClass(assessment.health)}">${Utils.capitalize(assessment.health)}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Identified Threats</h6>
+                            <p>${assessment.threats.length > 0 ? assessment.threats.map(t => Utils.capitalize(t)).join(', ') : 'None identified'}</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Record Created</h6>
+                            <p>${Utils.formatDateTime(assessment.createdAt)}</p>
+                        </div>
+                    `;
+
+                    new bootstrap.Modal(document.getElementById('modalViewAssessment')).show();
+                },
+
+                getHealthBadgeClass: function(health) {
+                    const classes = {
+                        'excellent': 'bg-success',
+                        'good': 'bg-success',
+                        'fair': 'bg-warning',
+                        'poor': 'bg-danger',
+                        'degraded': 'bg-danger'
+                    };
+                    return classes[health] || 'bg-secondary';
+                },
+
+                // ==================== SPECIES FUNCTIONS ====================
+                loadSpecies: function() {
+                    const filteredSpecies = Utils.filterByCurrentSite(db.species);
+                    
+                    // Load species cards
+                    const cardsContainer = document.getElementById('speciesCardsContainer');
+                    if (cardsContainer) {
+                        cardsContainer.innerHTML = '';
+
+                        const recentSpecies = filteredSpecies
+                            .sort((a, b) => new Date(b.lastObserved || 0) - new Date(a.lastObserved || 0))
+                            .slice(0, 3);
+
+                        if (recentSpecies.length === 0) {
+                            cardsContainer.innerHTML = `
+                                <div class="col-12">
+                                    <div class="empty-state">
+                                        <i class="bi bi-tree"></i>
+                                        <p>No species recorded for this site</p>
+                                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#modalNewSpecies">
+                                            Add First Species
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            recentSpecies.forEach(species => {
+                                const col = document.createElement('div');
+                                col.className = 'col-md-4 mb-4';
+                                col.innerHTML = `
+                                    <div class="card h-100 species-card">
+                                        <img src="${species.image || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'200\' viewBox=\'0 0 300 200\'%3E%3Crect width=\'300\' height=\'200\' fill=\'%23e9ecef\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'system-ui\' font-size=\'16\' fill=\'%236c757d\'%3ENo Image%3C/text%3E%3C/svg%3E'}" 
+                                             class="card-img-top" alt="${Utils.sanitizeHTML(species.scientificName)}">
+                                        <div class="card-body">
+                                            <h5 class="card-title">${Utils.sanitizeHTML(species.scientificName)}</h5>
+                                            <h6 class="card-subtitle mb-2 text-muted">${Utils.sanitizeHTML(species.commonName) || 'No common name'}</h6>
+                                            <p class="card-text">
+                                                <span class="badge ${this.getSpeciesStatusBadgeClass(species.status)} me-1">${Utils.capitalize(species.status)}</span>
+                                                ${species.status === 'weed' || species.status === 'pest' ? '<span class="badge bg-warning">High priority</span>' : ''}
+                                            </p>
+                                            <p class="card-text"><small>Last observed: ${species.lastObserved ? Utils.formatDate(species.lastObserved) : 'Not recorded'}</small></p>
+                                            <button class="btn btn-sm btn-outline-primary view-species-card" data-id="${species.id}">
+                                                View Details
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                                cardsContainer.appendChild(col);
+                            });
+                        }
+                    }
+
+                    // Load species table
+                    const table = document.getElementById('speciesTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    // Update dropdowns
+                    this.updateSpeciesDropdowns();
+
+                    if (filteredSpecies.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-tree"></i>
+                                        <p>No species recorded for this site</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        filteredSpecies.forEach(species => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Scientific Name">${Utils.sanitizeHTML(species.scientificName)}</td>
+                                <td data-label="Common Name">${Utils.sanitizeHTML(species.commonName) || '-'}</td>
+                                <td data-label="Type">${Utils.capitalize(species.type)}</td>
+                                <td data-label="Status">
+                                    <span class="badge ${this.getSpeciesStatusBadgeClass(species.status)}">${Utils.capitalize(species.status)}</span>
+                                </td>
+                                <td data-label="Last Observed">${species.lastObserved ? Utils.formatDate(species.lastObserved) : 'Not recorded'}</td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-species" data-id="${species.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    // Add event listeners
+                    document.querySelectorAll('.view-species, .view-species-card').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const species = db.species.find(s => s.id === id);
+                            if (species) this.showSpeciesDetails(species);
+                        });
+                    });
+                },
+
+                updateSpeciesDropdowns: function() {
+                    const filteredSpecies = Utils.filterByCurrentSite(db.species);
+                    
+                    // Monitoring species dropdown
+                    const monitoringSelect = document.getElementById('monitoringSpecies');
+                    if (monitoringSelect) {
+                        monitoringSelect.innerHTML = '';
+                        filteredSpecies.forEach(species => {
+                            const option = document.createElement('option');
+                            option.value = species.id;
+                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                            monitoringSelect.appendChild(option);
+                        });
+                    }
+
+                    // Fauna species dropdown
+                    const faunaSelect = document.getElementById('faunaSpecies');
+                    if (faunaSelect) {
+                        faunaSelect.innerHTML = '<option value="" selected disabled>Select species...</option>';
+                        filteredSpecies.filter(s => s.type === 'fauna').forEach(species => {
+                            const option = document.createElement('option');
+                            option.value = species.id;
+                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                            faunaSelect.appendChild(option);
+                        });
+                    }
+
+                    // Vegetation species dropdown
+                    const vegSelect = document.getElementById('vegetationSpecies');
+                    if (vegSelect) {
+                        vegSelect.innerHTML = '';
+                        filteredSpecies.filter(s => s.type === 'flora').forEach(species => {
+                            const option = document.createElement('option');
+                            option.value = species.id;
+                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                            vegSelect.appendChild(option);
+                        });
+                    }
+                },
+
+                saveSpecies: function() {
+                    const form = document.getElementById('formNewSpecies');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+
+                    // Handle image (simplified)
+                    let image = '';
+                    const fileInput = document.getElementById('speciesImage');
+                    if (fileInput.files.length > 0) {
+                        image = URL.createObjectURL(fileInput.files[0]);
+                    }
+
+                    const newSpecies = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        scientificName: document.getElementById('speciesScientificName').value,
+                        commonName: document.getElementById('speciesCommonName').value || null,
+                        type: document.getElementById('speciesType').value,
+                        status: document.getElementById('speciesStatus').value,
+                        description: document.getElementById('speciesDescription').value,
+                        habitat: document.getElementById('speciesHabitat').value || null,
+                        lastObserved: document.getElementById('speciesLastObserved').value || null,
+                        image: image,
+                        notes: document.getElementById('speciesNotes').value,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.species.push(newSpecies);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        document.getElementById('speciesImagePreview').style.display = 'none';
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewSpecies')).hide();
+                        Utils.showToast('Success', 'Species record saved successfully!');
+                        
+                        this.loadSpecies();
+                        this.loadDashboard();
+                    }
+                },
+
+                showSpeciesDetails: function(species) {
+                    const modalBody = document.getElementById('speciesModalBody');
+                    if (!modalBody) return;
+
+                    modalBody.innerHTML = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Scientific Name</h6>
+                                <p>${Utils.sanitizeHTML(species.scientificName)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Common Name</h6>
+                                <p>${Utils.sanitizeHTML(species.commonName) || 'Not specified'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Type</h6>
+                                <p>${Utils.capitalize(species.type)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Status</h6>
+                                <span class="badge ${this.getSpeciesStatusBadgeClass(species.status)}">${Utils.capitalize(species.status)}</span>
+                            </div>
+                        </div>
+                        
+                        ${species.description ? `
+                        <div class="mb-3">
+                            <h6>Description</h6>
+                            <p>${Utils.sanitizeHTML(species.description)}</p>
+                        </div>
+                        ` : ''}
+                        
+                        ${species.habitat ? `
+                        <div class="mb-3">
+                            <h6>Habitat</h6>
+                            <p>${Utils.sanitizeHTML(species.habitat)}</p>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Last Observed</h6>
+                                <p>${species.lastObserved ? Utils.formatDate(species.lastObserved) : 'Not recorded'}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Record Created</h6>
+                                <p>${Utils.formatDateTime(species.createdAt)}</p>
+                            </div>
+                        </div>
+                        
+                        ${species.image ? `
+                        <div class="mb-3">
+                            <h6>Image</h6>
+                            <img src="${species.image}" alt="${Utils.sanitizeHTML(species.scientificName)}" class="img-fluid rounded">
+                        </div>
+                        ` : ''}
+                        
+                        ${species.notes ? `
+                        <div class="mb-3">
+                            <h6>Notes</h6>
+                            <p>${Utils.sanitizeHTML(species.notes)}</p>
+                        </div>
+                        ` : ''}
+                    `;
+
+                    new bootstrap.Modal(document.getElementById('modalViewSpecies')).show();
+                },
+
+                getSpeciesStatusBadgeClass: function(status) {
+                    const classes = {
+                        'native': 'bg-success',
+                        'introduced': 'bg-secondary',
+                        'weed': 'bg-danger',
+                        'pest': 'bg-danger',
+                        'endangered': 'bg-danger',
+                        'vulnerable': 'bg-warning',
+                        'threatened': 'bg-warning'
+                    };
+                    return classes[status] || 'bg-secondary';
+                },
+
+                // ==================== ACTIVITY FUNCTIONS ====================
+                loadActivities: function() {
+                    this.loadUpcomingActivities();
+                    this.loadCompletedActivities();
+                    this.loadOverdueActivities();
+                },
+
+                loadUpcomingActivities: function() {
+                    const table = document.getElementById('upcomingActivitiesTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const filteredActivities = Utils.filterByCurrentSite(db.activities);
+                    const upcoming = filteredActivities
+                        .filter(a => a.status === 'planned' || a.status === 'in-progress')
+                        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+                    if (upcoming.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-calendar-check"></i>
+                                        <p>No upcoming activities for this site</p>
+                                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#modalNewActivity">
+                                            Schedule First Activity
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        upcoming.forEach(activity => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
+                                <td data-label="Type">${this.formatActivityType(activity.type)}</td>
+                                <td data-label="Scheduled">${Utils.formatDateTime(activity.startDate)}</td>
+                                <td data-label="Location">${Utils.sanitizeHTML(activity.location)}</td>
+                                <td data-label="Assigned To">${Utils.sanitizeHTML(activity.assignedTo)}</td>
+                                <td data-label="Status">
+                                    <span class="badge ${this.getStatusBadgeClass(activity.status)}">${Utils.capitalize(activity.status)}</span>
+                                </td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-activity" data-id="${activity.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    this.addActivityEventListeners();
+                },
+
+                loadCompletedActivities: function() {
+                    const table = document.getElementById('completedActivitiesTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const filteredActivities = Utils.filterByCurrentSite(db.activities);
+                    const completed = filteredActivities
+                        .filter(a => a.status === 'completed')
+                        .sort((a, b) => new Date(b.endDate || b.startDate) - new Date(a.endDate || a.startDate));
+
+                    if (completed.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-check-circle"></i>
+                                        <p>No completed activities for this site</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        completed.forEach(activity => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
+                                <td data-label="Type">${this.formatActivityType(activity.type)}</td>
+                                <td data-label="Completed">${Utils.formatDateTime(activity.endDate || activity.startDate)}</td>
+                                <td data-label="Location">${Utils.sanitizeHTML(activity.location)}</td>
+                                <td data-label="Assigned To">${Utils.sanitizeHTML(activity.assignedTo)}</td>
+                                <td data-label="Status">
+                                    <span class="badge bg-success">Completed</span>
+                                </td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-activity" data-id="${activity.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    this.addActivityEventListeners();
+                },
+
+                loadOverdueActivities: function() {
+                    const table = document.getElementById('overdueActivitiesTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    const filteredActivities = Utils.filterByCurrentSite(db.activities);
+                    const overdue = filteredActivities
+                        .filter(a => (a.status === 'planned' || a.status === 'in-progress') && new Date(a.startDate) < today)
+                        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+                    if (overdue.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        <p>No overdue activities for this site</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        overdue.forEach(activity => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
+                                <td data-label="Type">${this.formatActivityType(activity.type)}</td>
+                                <td data-label="Due Date">${Utils.formatDateTime(activity.startDate)}</td>
+                                <td data-label="Location">${Utils.sanitizeHTML(activity.location)}</td>
+                                <td data-label="Assigned To">${Utils.sanitizeHTML(activity.assignedTo)}</td>
+                                <td data-label="Status"><span class="badge bg-danger">Overdue</span></td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-activity" data-id="${activity.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    this.addActivityEventListeners();
+                },
+
+                addActivityEventListeners: function() {
+                    document.querySelectorAll('.view-activity').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const activity = db.activities.find(a => a.id === id);
+                            if (activity) this.showActivityDetails(activity);
+                        });
+                    });
+                },
+
+                saveActivity: function() {
+                    const form = document.getElementById('formNewActivity');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+
+                    const newActivity = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        type: document.getElementById('activityType').value,
+                        title: document.getElementById('activityTitle').value,
+                        startDate: document.getElementById('activityStartDate').value,
+                        endDate: document.getElementById('activityEndDate').value || null,
+                        location: document.getElementById('activityLocation').value,
+                        description: document.getElementById('activityDescription').value,
+                        assignedTo: document.getElementById('activityAssignedTo').value,
+                        priority: document.getElementById('activityPriority').value,
+                        status: document.getElementById('activityStatus').value,
+                        notes: document.getElementById('activityNotes').value,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.activities.push(newActivity);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewActivity')).hide();
+                        Utils.showToast('Success', 'Activity saved successfully!');
+                        
+                        this.loadActivities();
+                        if (window.calendar) {
+                            window.calendar.refetchEvents();
+                        }
+                        this.loadDashboard();
+                    }
+                },
+
+                showActivityDetails: function(activity) {
+                    const modalBody = document.getElementById('activityModalBody');
+                    if (!modalBody) return;
+
+                    modalBody.innerHTML = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Activity Type</h6>
+                                <p>${this.formatActivityType(activity.type)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Title</h6>
+                                <p>${Utils.sanitizeHTML(activity.title)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Start Date</h6>
+                                <p>${Utils.formatDateTime(activity.startDate)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>${activity.status === 'completed' ? 'Completed' : 'End'} Date</h6>
+                                <p>${activity.endDate ? Utils.formatDateTime(activity.endDate) : 'Not specified'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Location</h6>
+                                <p>${Utils.sanitizeHTML(activity.location)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Assigned To</h6>
+                                <p>${Utils.sanitizeHTML(activity.assignedTo)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Priority</h6>
+                                <span class="badge ${activity.priority === 'high' ? 'bg-danger' : activity.priority === 'medium' ? 'bg-warning' : 'bg-info'}">
+                                    ${Utils.capitalize(activity.priority)}
+                                </span>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Status</h6>
+                                <span class="badge ${this.getStatusBadgeClass(activity.status)}">${Utils.capitalize(activity.status)}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Description</h6>
+                            <p>${Utils.sanitizeHTML(activity.description)}</p>
+                        </div>
+                        
+                        ${activity.notes ? `
+                        <div class="mb-3">
+                            <h6>Notes</h6>
+                            <p>${Utils.sanitizeHTML(activity.notes)}</p>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="mb-3">
+                            <h6>Record Created</h6>
+                            <p>${Utils.formatDateTime(activity.createdAt)}</p>
+                        </div>
+                    `;
+
+                    // Setup complete button
+                    const completeBtn = document.getElementById('completeActivityBtn');
+                    if (completeBtn) {
+                        if (activity.status === 'completed') {
+                            completeBtn.style.display = 'none';
+                        } else {
+                            completeBtn.style.display = 'inline-block';
+                            completeBtn.onclick = () => this.completeActivity(activity.id);
+                        }
+                    }
+
+                    new bootstrap.Modal(document.getElementById('modalViewActivity')).show();
+                },
+
+                completeActivity: function(activityId) {
+                    const activity = db.activities.find(a => a.id === activityId);
+                    if (activity) {
+                        activity.status = 'completed';
+                        activity.endDate = new Date().toISOString();
+                        
+                        if (Utils.saveData()) {
+                            bootstrap.Modal.getInstance(document.getElementById('modalViewActivity')).hide();
+                            Utils.showToast('Success', 'Activity marked as completed!');
+                            
+                            this.loadActivities();
+                            if (window.calendar) {
+                                window.calendar.refetchEvents();
+                            }
+                            this.loadDashboard();
+                        }
+                    }
+                },
+
+                formatActivityType: function(type) {
+                    const formats = {
+                        'weed-control': 'Weed Control',
+                        'revegetation': 'Revegetation',
+                        'erosion-control': 'Erosion Control',
+                        'fauna-survey': 'Fauna Survey',
+                        'vegetation-survey': 'Vegetation Survey',
+                        'water-quality': 'Water Quality'
+                    };
+                    return formats[type] || Utils.capitalize(type);
+                },
+
+                getStatusBadgeClass: function(status) {
+                    const classes = {
+                        'completed': 'bg-success',
+                        'in-progress': 'bg-info',
+                        'planned': 'bg-primary',
+                        'cancelled': 'bg-secondary'
+                    };
+                    return classes[status] || 'bg-secondary';
+                },
+
+                // ==================== MONITORING FUNCTIONS ====================
+                loadMonitoring: function() {
+                    const table = document.getElementById('monitoringTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const filteredMonitoring = Utils.filterByCurrentSite(db.monitoring);
+
+                    if (filteredMonitoring.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-binoculars"></i>
+                                        <p>No monitoring activities recorded for this site</p>
+                                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#modalNewMonitoring">
+                                            Add First Monitoring
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        filteredMonitoring.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(monitoring => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Date">${Utils.formatDate(monitoring.date)}</td>
+                                <td data-label="Type">${this.formatMonitoringType(monitoring.type)}</td>
+                                <td data-label="Location">${Utils.sanitizeHTML(monitoring.location)}</td>
+                                <td data-label="Observer">${Utils.sanitizeHTML(monitoring.observer)}</td>
+                                <td data-label="Findings">${Utils.sanitizeHTML(monitoring.findings.substring(0, 50))}${monitoring.findings.length > 50 ? '...' : ''}</td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-monitoring" data-id="${monitoring.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    document.querySelectorAll('.view-monitoring').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const monitoring = db.monitoring.find(m => m.id === id);
+                            if (monitoring) this.showMonitoringDetails(monitoring);
+                        });
+                    });
+                },
+
+                saveMonitoring: function() {
+                    const form = document.getElementById('formNewMonitoring');
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+
+                    const species = Array.from(document.getElementById('monitoringSpecies').selectedOptions)
+                        .map(opt => parseInt(opt.value));
+
+                    const newMonitoring = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        type: document.getElementById('monitoringType').value,
+                        date: document.getElementById('monitoringDate').value,
+                        location: document.getElementById('monitoringLocation').value,
+                        observer: document.getElementById('monitoringObserver').value,
+                        findings: document.getElementById('monitoringFindings').value,
+                        species: species,
+                        photos: [],
+                        notes: document.getElementById('monitoringNotes').value,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.monitoring.push(newMonitoring);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        document.getElementById('monitoringPhotoPreview').innerHTML = '';
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewMonitoring')).hide();
+                        Utils.showToast('Success', 'Monitoring record saved successfully!');
+                        
+                        this.loadMonitoring();
+                        this.loadDashboard();
+                    }
+                },
+
+                showMonitoringDetails: function(monitoring) {
+                    const modalBody = document.getElementById('monitoringModalBody');
+                    if (!modalBody) return;
+
+                    const speciesNames = monitoring.species.map(id => {
+                        const s = db.species.find(sp => sp.id === id);
+                        return s ? `${s.scientificName}${s.commonName ? ` (${s.commonName})` : ''}` : 'Unknown species';
+                    });
+
+                    modalBody.innerHTML = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Monitoring Type</h6>
+                                <p>${this.formatMonitoringType(monitoring.type)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Date</h6>
+                                <p>${Utils.formatDate(monitoring.date)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Location</h6>
+                                <p>${Utils.sanitizeHTML(monitoring.location)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Observer</h6>
+                                <p>${Utils.sanitizeHTML(monitoring.observer)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Findings</h6>
+                            <p>${Utils.sanitizeHTML(monitoring.findings)}</p>
+                        </div>
+                        
+                        ${speciesNames.length > 0 ? `
+                        <div class="mb-3">
+                            <h6>Species Observed</h6>
+                            <ul class="list-unstyled">
+                                ${speciesNames.map(name => `<li><i class="bi bi-check-circle-fill text-success me-2"></i>${Utils.sanitizeHTML(name)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        ` : ''}
+                        
+                        ${monitoring.notes ? `
+                        <div class="mb-3">
+                            <h6>Notes</h6>
+                            <p>${Utils.sanitizeHTML(monitoring.notes)}</p>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="mb-3">
+                            <h6>Record Created</h6>
+                            <p>${Utils.formatDateTime(monitoring.createdAt)}</p>
+                        </div>
+                    `;
+
+                    new bootstrap.Modal(document.getElementById('modalViewMonitoring')).show();
+                },
+
+                formatMonitoringType: function(type) {
+                    const formats = {
+                        'fauna-survey': 'Fauna Survey',
+                        'vegetation-survey': 'Vegetation Survey',
+                        'water-quality': 'Water Quality Testing',
+                        'weed-mapping': 'Weed Mapping',
+                        'erosion-monitoring': 'Erosion Monitoring'
+                    };
+                    return formats[type] || Utils.capitalize(type);
+                },
+
+                // ==================== REPORT FUNCTIONS ====================
+                loadReports: function() {
+                    const table = document.getElementById('reportsTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    const filteredReports = Utils.filterByCurrentSite(db.reports);
+
+                    if (filteredReports.length === 0) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <div class="empty-state">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                        <p>No reports generated for this site</p>
+                                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#modalGenerateReport">
+                                            Generate First Report
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        filteredReports.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(report => {
+                            const row = tbody.insertRow();
+                            row.innerHTML = `
+                                <td data-label="Date">${Utils.formatDate(report.date)}</td>
+                                <td data-label="Report Type">${this.formatReportType(report.type)}</td>
+                                <td data-label="Generated By">${Utils.sanitizeHTML(report.generatedBy)}</td>
+                                <td data-label="Period">${report.period || 'N/A'}</td>
+                                <td data-label="Actions">
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary view-report" data-id="${report.id}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary download-report" data-id="${report.id}">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        });
+                    }
+
+                    document.querySelectorAll('.view-report').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const report = db.reports.find(r => r.id === id);
+                            if (report) this.showReportDetails(report);
+                        });
+                    });
+
+                    document.querySelectorAll('.download-report').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const report = db.reports.find(r => r.id === id);
+                            if (report) this.downloadReport(report);
+                        });
+                    });
+                },
+
+                generateReport: function(type) {
+                    const currentSite = Utils.getCurrentSite();
+                    
+                    const reportTypes = {
+                        'compliance': 'Compliance Report',
+                        'maintenance': 'Maintenance Summary',
+                        'monitoring': 'Monitoring Summary',
+                        'health-trend': 'Ecosystem Health Trend',
+                        'threat-management': 'Threat Management'
+                    };
+
+                    const filteredData = type === 'maintenance' ? Utils.filterByCurrentSite(db.activities) :
+                                       type === 'monitoring' ? Utils.filterByCurrentSite(db.monitoring) :
+                                       type === 'health-trend' ? Utils.filterByCurrentSite(db.assessments) :
+                                       [];
+
+                    const newReport = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        type: type,
+                        date: new Date().toISOString(),
+                        generatedBy: db.settings.userProfile.name,
+                        period: 'All time',
+                        content: {
+                            title: reportTypes[type],
+                            body: `Report generated for ${currentSite?.name || 'site'}`,
+                            data: filteredData,
+                            progress: type === 'compliance' ? 
+                                Math.round((db.complianceChecklist.filter(item => item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
+                            checklist: type === 'compliance' ? db.complianceChecklist : []
+                        },
+                        format: 'pdf',
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.reports.push(newReport);
+                    
+                    if (Utils.saveData()) {
+                        Utils.showToast('Success', `${reportTypes[type]} generated successfully!`);
+                        this.loadReports();
+                        this.showReportDetails(newReport);
+                    }
+                },
+
+                generateReportFromModal: function() {
+                    const type = document.getElementById('reportType').value;
+                    if (!type) {
+                        document.getElementById('reportType').classList.add('is-invalid');
+                        return;
+                    }
+
+                    const startDate = document.getElementById('reportStartDate').value;
+                    const endDate = document.getElementById('reportEndDate').value;
+                    const format = document.getElementById('reportFormat').value;
+                    const currentSite = Utils.getCurrentSite();
+
+                    const reportTypes = {
+                        'compliance': 'Compliance Report',
+                        'maintenance': 'Maintenance Summary',
+                        'monitoring': 'Monitoring Summary',
+                        'health-trend': 'Ecosystem Health Trend',
+                        'threat-management': 'Threat Management'
+                    };
+
+                    // Filter data by date if provided
+                    let data = [];
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        
+                        if (type === 'maintenance') {
+                            data = Utils.filterByCurrentSite(db.activities).filter(a => {
+                                const date = new Date(a.startDate);
+                                return date >= start && date <= end;
+                            });
+                        } else if (type === 'monitoring') {
+                            data = Utils.filterByCurrentSite(db.monitoring).filter(m => {
+                                const date = new Date(m.date);
+                                return date >= start && date <= end;
+                            });
+                        } else if (type === 'health-trend') {
+                            data = Utils.filterByCurrentSite(db.assessments).filter(a => {
+                                const date = new Date(a.date);
+                                return date >= start && date <= end;
+                            });
+                        }
+                    } else {
+                        data = type === 'maintenance' ? Utils.filterByCurrentSite(db.activities) :
+                               type === 'monitoring' ? Utils.filterByCurrentSite(db.monitoring) :
+                               type === 'health-trend' ? Utils.filterByCurrentSite(db.assessments) :
+                               [];
+                    }
+
+                    const newReport = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        type: type,
+                        date: new Date().toISOString(),
+                        generatedBy: db.settings.userProfile.name,
+                        period: startDate && endDate ? `${Utils.formatDate(startDate)} to ${Utils.formatDate(endDate)}` : 'All time',
+                        content: {
+                            title: reportTypes[type],
+                            body: `Report generated for ${currentSite?.name || 'site'}`,
+                            data: data,
+                            progress: type === 'compliance' ? 
+                                Math.round((db.complianceChecklist.filter(item => item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
+                            checklist: type === 'compliance' ? db.complianceChecklist : []
+                        },
+                        format: format,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    db.reports.push(newReport);
+                    
+                    if (Utils.saveData()) {
+                        bootstrap.Modal.getInstance(document.getElementById('modalGenerateReport')).hide();
+                        
+                        // Generate in selected format
+                        if (format === 'pdf') {
+                            this.generatePDFReport(newReport);
+                        } else if (format === 'excel') {
+                            this.generateExcelReport(newReport);
+                        } else {
+                            this.generateWordReport(newReport);
+                        }
+                        
+                        Utils.showToast('Success', `${reportTypes[type]} generated successfully!`);
+                        this.loadReports();
+                    }
+                },
+
+                generatePDFReport: function(report) {
+                    try {
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF();
+                        
+                        // Title
+                        doc.setFontSize(20);
+                        doc.setTextColor(44, 62, 80);
+                        doc.text(report.content.title, 20, 20);
+                        
+                        // Metadata
+                        doc.setFontSize(11);
+                        doc.setTextColor(100, 100, 100);
+                        doc.text(`Generated: ${Utils.formatDateTime(report.date)}`, 20, 35);
+                        doc.text(`By: ${report.generatedBy}`, 20, 42);
+                        doc.text(`Site: ${Utils.getCurrentSite()?.name || 'Unknown'}`, 20, 49);
+                        doc.text(`Period: ${report.period}`, 20, 56);
+                        
+                        let yPos = 70;
+                        
+                        // Content based on type
+                        if (report.type === 'compliance' && report.content.checklist) {
+                            doc.setFontSize(14);
+                            doc.setTextColor(44, 62, 80);
+                            doc.text('Compliance Summary', 20, yPos);
+                            yPos += 10;
+                            
+                            // Progress bar representation
+                            if (report.content.progress !== null) {
+                                doc.setFillColor(200, 200, 200);
+                                doc.rect(20, yPos, 170, 8, 'F');
+                                doc.setFillColor(40, 167, 69);
+                                doc.rect(20, yPos, (170 * report.content.progress) / 100, 8, 'F');
+                                doc.setFontSize(10);
+                                doc.text(`Compliance: ${report.content.progress}%`, 25, yPos + 6);
+                                yPos += 15;
+                            }
+                            
+                            // AutoTable is loaded via the plugin
+                            if (doc.autoTable) {
+                                doc.autoTable({
+                                    startY: yPos,
+                                    head: [['Requirement', 'Status', 'Evidence']],
+                                    body: report.content.checklist.map(item => [
+                                        item.requirement,
+                                        item.compliant || 'Not assessed',
+                                        item.evidence || 'None'
+                                    ]),
+                                    theme: 'grid',
+                                    styles: { fontSize: 9 },
+                                    headStyles: { fillColor: [52, 152, 219] }
+                                });
+                            }
+                        } else {
+                            doc.setFontSize(12);
+                            doc.setTextColor(80, 80, 80);
+                            doc.text(report.content.body, 20, yPos);
+                        }
+                        
+                        doc.save(`report-${report.type}-${new Date().toISOString().split('T')[0]}.pdf`);
+                        
+                    } catch (error) {
+                        console.error('PDF generation error:', error);
+                        Utils.showToast('Error', 'Failed to generate PDF', 'error');
+                    }
+                },
+
+                generateExcelReport: function(report) {
+                    try {
+                        if (typeof XLSX === 'undefined') {
+                            Utils.showToast('Error', 'Excel library not loaded', 'error');
+                            return;
+                        }
+
+                        const wb = XLSX.utils.book_new();
+                        const currentSite = Utils.getCurrentSite();
+                        
+                        if (report.type === 'compliance') {
+                            const data = [
+                                ['Compliance Report'],
+                                ['Generated:', Utils.formatDateTime(report.date), 'By:', report.generatedBy],
+                                ['Site:', currentSite?.name || 'Unknown', 'Period:', report.period],
+                                [],
+                                ['Requirement', 'Status', 'Evidence', 'Notes']
+                            ];
+                            
+                            report.content.checklist.forEach(item => {
+                                data.push([
+                                    item.requirement,
+                                    item.compliant || 'Not assessed',
+                                    item.evidence || 'None',
+                                    item.notes || ''
+                                ]);
+                            });
+                            
+                            const ws = XLSX.utils.aoa_to_sheet(data);
+                            XLSX.utils.book_append_sheet(wb, ws, 'Compliance');
+                            
+                        } else if (report.type === 'maintenance') {
+                            const data = [
+                                ['Maintenance Activities Report'],
+                                ['Generated:', Utils.formatDateTime(report.date), 'By:', report.generatedBy],
+                                ['Site:', currentSite?.name || 'Unknown', 'Period:', report.period],
+                                [],
+                                ['Title', 'Type', 'Date', 'Status', 'Assigned To', 'Location', 'Priority']
+                            ];
+                            
+                            (report.content.data || []).forEach(activity => {
+                                data.push([
+                                    activity.title,
+                                    this.formatActivityType(activity.type),
+                                    Utils.formatDateTime(activity.startDate),
+                                    Utils.capitalize(activity.status),
+                                    activity.assignedTo,
+                                    activity.location,
+                                    Utils.capitalize(activity.priority)
+                                ]);
+                            });
+                            
+                            const ws = XLSX.utils.aoa_to_sheet(data);
+                            XLSX.utils.book_append_sheet(wb, ws, 'Maintenance');
+                        }
+                        
+                        XLSX.writeFile(wb, `report-${report.type}-${new Date().toISOString().split('T')[0]}.xlsx`);
+                        
+                    } catch (error) {
+                        console.error('Excel generation error:', error);
+                        Utils.showToast('Error', 'Failed to generate Excel file', 'error');
+                    }
+                },
+
+                generateWordReport: function(report) {
+                    try {
+                        const currentSite = Utils.getCurrentSite();
+                        
+                        const html = `
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="UTF-8">
+                                <title>${report.content.title}</title>
+                                <style>
+                                    body { font-family: Arial, sans-serif; margin: 40px; }
+                                    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+                                    .metadata { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                                    th { background-color: #3498db; color: white; }
+                                    .progress-bar { background: #ecf0f1; height: 20px; border-radius: 10px; margin: 10px 0; }
+                                    .progress-fill { background: #27ae60; height: 100%; border-radius: 10px; }
+                                </style>
+                            </head>
+                            <body>
+                                <h1>${report.content.title}</h1>
+                                
+                                <div class="metadata">
+                                    <p><strong>Generated:</strong> ${Utils.formatDateTime(report.date)}</p>
+                                    <p><strong>By:</strong> ${report.generatedBy}</p>
+                                    <p><strong>Site:</strong> ${currentSite?.name || 'Unknown'}</p>
+                                    <p><strong>Period:</strong> ${report.period}</p>
+                                </div>
+                                
+                                ${report.type === 'compliance' && report.content.checklist ? `
+                                    <h2>Compliance Summary</h2>
+                                    ${report.content.progress !== null ? `
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: ${report.content.progress}%"></div>
+                                        </div>
+                                        <p>Overall Compliance: ${report.content.progress}%</p>
+                                    ` : ''}
+                                    
+                                    <table>
+                                        <tr>
+                                            <th>Requirement</th>
+                                            <th>Status</th>
+                                            <th>Evidence</th>
+                                        </tr>
+                                        ${report.content.checklist.map(item => `
+                                            <tr>
+                                                <td>${item.requirement}</td>
+                                                <td>${item.compliant || 'Not assessed'}</td>
+                                                <td>${item.evidence || 'None'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </table>
+                                ` : ''}
+                            </body>
+                            </html>
+                        `;
+                        
+                        const blob = new Blob([html], { type: 'application/msword' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `report-${report.type}-${new Date().toISOString().split('T')[0]}.doc`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        
+                    } catch (error) {
+                        console.error('Word generation error:', error);
+                        Utils.showToast('Error', 'Failed to generate Word document', 'error');
+                    }
+                },
+
+                downloadReport: function(report) {
+                    if (report.format === 'pdf') {
+                        this.generatePDFReport(report);
+                    } else if (report.format === 'excel') {
+                        this.generateExcelReport(report);
+                    } else {
+                        this.generateWordReport(report);
+                    }
+                },
+
+                showReportDetails: function(report) {
+                    const modalBody = document.getElementById('reportModalBody');
+                    if (!modalBody) return;
+
+                    let html = `
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Report Type</h6>
+                                <p>${this.formatReportType(report.type)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Generated On</h6>
+                                <p>${Utils.formatDateTime(report.date)}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>Generated By</h6>
+                                <p>${Utils.sanitizeHTML(report.generatedBy)}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Period</h6>
+                                <p>${report.period || 'N/A'}</p>
+                            </div>
+                        </div>
+                        
+                        <h4 class="mb-3">${report.content.title}</h4>
+                        <p class="mb-4">${report.content.body}</p>
+                    `;
+
+                    if (report.type === 'compliance' && report.content.checklist) {
+                        html += `
+                            <div class="mb-3">
+                                <h5>Compliance Progress: ${report.content.progress}%</h5>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: ${report.content.progress}%">
+                                        ${report.content.progress}%
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Requirement</th>
+                                            <th>Status</th>
+                                            <th>Evidence</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${report.content.checklist.map(item => `
+                                            <tr>
+                                                <td>${Utils.sanitizeHTML(item.requirement)}</td>
+                                                <td>${item.compliant || 'Not assessed'}</td>
+                                                <td>${item.evidence || 'None'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    }
+
+                    if (report.type === 'maintenance' && report.content.data) {
+                        html += `
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Activity</th>
+                                            <th>Type</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${report.content.data.slice(0, 10).map(activity => `
+                                            <tr>
+                                                <td>${Utils.sanitizeHTML(activity.title)}</td>
+                                                <td>${this.formatActivityType(activity.type)}</td>
+                                                <td>${Utils.formatDate(activity.startDate)}</td>
+                                                <td>${Utils.capitalize(activity.status)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                ${report.content.data.length > 10 ? `<p>... and ${report.content.data.length - 10} more items</p>` : ''}
+                            </div>
+                        `;
+                    }
+
+                    modalBody.innerHTML = html;
+                    
+                    const downloadBtn = document.getElementById('downloadReportBtn');
+                    downloadBtn.onclick = () => this.downloadReport(report);
+                    
+                    new bootstrap.Modal(document.getElementById('modalViewReport')).show();
+                },
+
+                formatReportType: function(type) {
+                    const formats = {
+                        'compliance': 'Compliance Report',
+                        'maintenance': 'Maintenance Summary',
+                        'monitoring': 'Monitoring Summary',
+                        'health-trend': 'Ecosystem Health Trend',
+                        'threat-management': 'Threat Management'
+                    };
+                    return formats[type] || Utils.capitalize(type);
+                },
+
+                // ==================== COMPLIANCE FUNCTIONS ====================
+                loadComplianceChecklist: function() {
+                    const table = document.getElementById('complianceChecklistTable');
+                    if (!table) return;
+
+                    const tbody = table.querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    db.complianceChecklist.forEach(item => {
+                        const row = tbody.insertRow();
+                        row.innerHTML = `
+                            <td>${Utils.sanitizeHTML(item.requirement)}</td>
+                            <td>
+                                <select class="form-select form-select-sm compliance-status" data-id="${item.id}">
+                                    <option value="" ${item.compliant === '' ? 'selected' : ''}>Select...</option>
+                                    <option value="Yes" ${item.compliant === 'Yes' ? 'selected' : ''}>Yes</option>
+                                    <option value="No" ${item.compliant === 'No' ? 'selected' : ''}>No</option>
+                                    <option value="Partial" ${item.compliant === 'Partial' ? 'selected' : ''}>Partial</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm compliance-evidence" 
+                                       data-id="${item.id}" value="${Utils.sanitizeHTML(item.evidence || '')}" 
+                                       placeholder="Document reference">
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary compliance-note" data-id="${item.id}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </td>
+                        `;
+                    });
+
+                    // Add note functionality
+                    document.querySelectorAll('.compliance-note').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = parseInt(btn.dataset.id);
+                            const note = prompt('Enter note:');
+                            if (note !== null) {
+                                const item = db.complianceChecklist.find(i => i.id === id);
+                                if (item) {
+                                    item.notes = note;
+                                    Utils.saveData();
+                                    Utils.showToast('Success', 'Note saved');
+                                }
+                            }
+                        });
+                    });
+                },
+
+                saveComplianceChecklist: function() {
+                    document.querySelectorAll('.compliance-status').forEach(select => {
+                        const id = parseInt(select.dataset.id);
+                        const item = db.complianceChecklist.find(i => i.id === id);
+                        if (item) item.compliant = select.value;
+                    });
+
+                    document.querySelectorAll('.compliance-evidence').forEach(input => {
+                        const id = parseInt(input.dataset.id);
+                        const item = db.complianceChecklist.find(i => i.id === id);
+                        if (item) item.evidence = input.value;
+                    });
+
+                    if (Utils.saveData()) {
+                        Utils.showToast('Success', 'Compliance checklist saved');
+                        this.loadDashboard();
+                    }
+                },
+
+                // ==================== SETTINGS FUNCTIONS ====================
+                loadSettings: function() {
+                    // User profile
+                    document.getElementById('settingsUserName').value = db.settings.userProfile.name || '';
+                    document.getElementById('settingsUserEmail').value = db.settings.userProfile.email || '';
+                    document.getElementById('settingsUserRole').value = db.settings.userProfile.role || '';
+
+                    // Site management buttons are already in place
+                },
+
+                saveUserProfile: function(e) {
+                    e.preventDefault();
+                    const form = document.getElementById('settingsUserProfileForm');
+                    
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+
+                    db.settings.userProfile = {
+                        name: document.getElementById('settingsUserName').value,
+                        email: document.getElementById('settingsUserEmail').value,
+                        role: document.getElementById('settingsUserRole').value
+                    };
+
+                    if (Utils.saveData()) {
+                        Utils.showToast('Success', 'Profile updated');
+                        form.classList.remove('was-validated');
+                    }
+                },
+
+                changePassword: function(e) {
+                    e.preventDefault();
+                    const form = document.getElementById('settingsPasswordForm');
+                    
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
+
+                    const newPass = document.getElementById('settingsNewPassword').value;
+                    const confirmPass = document.getElementById('settingsConfirmPassword').value;
+
+                    if (newPass !== confirmPass) {
+                        document.getElementById('settingsConfirmPassword').classList.add('is-invalid');
+                        return;
+                    }
+
+                    // In production, this would hash and send to server
+                    Utils.showToast('Success', 'Password changed successfully');
+                    form.reset();
+                    form.classList.remove('was-validated');
+                },
+
+                // ==================== DATA MANAGEMENT FUNCTIONS ====================
+                exportAllData: function() {
+                    const exportData = {
+                        assessments: db.assessments,
+                        species: db.species,
+                        activities: db.activities,
+                        monitoring: db.monitoring,
+                        reports: db.reports,
+                        faunaSightings: db.faunaSightings,
+                        vegetationSurveys: db.vegetationSurveys,
+                        complianceChecklist: db.complianceChecklist,
+                        settings: db.settings,
+                        sites: db.sites,
+                        siteMaps: db.siteMaps,
+                        exportDate: new Date().toISOString(),
+                        version: '1.0.0 (Multi-site)'
+                    };
+
+                    const dataStr = JSON.stringify(exportData, null, 2);
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `ecosystem-data-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+
+                    Utils.showToast('Success', 'Data exported successfully');
+                },
+
+                backupDatabase: function() {
+                    this.exportAllData();
+                    localStorage.setItem('lastBackup', new Date().toLocaleString());
+                    document.getElementById('lastBackupInfo').textContent = new Date().toLocaleString();
+                    Utils.showToast('Info', 'Backup created', 'info');
+                },
+
+                resetTestData: function() {
+                    Utils.showConfirmation(
+                        'Reset Test Data',
+                        'Are you sure you want to reset all test data? This will restore the initial sample data and cannot be undone.',
+                        () => {
+                            // Clear existing data
+                            localStorage.clear();
+                            
+                            // Reset db
+                            db.assessments = [];
+                            db.species = [];
+                            db.activities = [];
+                            db.monitoring = [];
+                            db.reports = [];
+                            db.faunaSightings = [];
+                            db.vegetationSurveys = [];
+                            db.complianceChecklist = [
+                                { id: 1, requirement: "Identified all relevant legislation", compliant: "", evidence: "", notes: "" },
+                                { id: 2, requirement: "Assessed impacts on protected matters", compliant: "", evidence: "", notes: "" },
+                                { id: 3, requirement: "Obtained necessary permits/approvals", compliant: "", evidence: "", notes: "" },
+                                { id: 4, requirement: "Implemented required protections", compliant: "", evidence: "", notes: "" },
+                                { id: 5, requirement: "Maintained required records", compliant: "", evidence: "", notes: "" }
+                            ];
+                            db.settings = {
+                                userProfile: {
+                                    name: "John Doe",
+                                    email: "john.doe@example.com",
+                                    role: "ecologist"
+                                }
+                            };
+                            db.sites = [];
+                            db.siteMaps = {};
+                            db.currentSiteId = null;
+                            
+                            // Reload initial data
+                            this.loadInitialData();
+                            
+                            // Refresh site selector and all views
+                            SiteManager.loadSiteSelector();
+                            this.loadAllData();
+                            
+                                                    
+                        // Refresh calendar
+                        if (window.calendar) {
+                            window.calendar.refetchEvents();
+                        }
+                        
+                        // Refresh map (reinitialize)
+                        if (window.map) {
+                            window.map.remove();
+                            this.initMap();
+                        }
+                        
+                        Utils.showToast('Success', 'Test data has been reset');
+                    }
+                );
+            },
+
+            // ==================== FAUNA AND VEGETATION FUNCTIONS ====================
+            saveFaunaSighting: function() {
+                const form = document.getElementById('formFaunaSighting');
+                if (!form.checkValidity()) {
+                    form.classList.add('was-validated');
+                    return;
+                }
+
+                const newSighting = {
+                    id: Utils.generateId(),
+                    siteId: db.currentSiteId,
+                    speciesId: parseInt(document.getElementById('faunaSpecies').value),
+                    date: document.getElementById('faunaDate').value,
+                    location: document.getElementById('faunaLocation').value,
+                    observer: document.getElementById('faunaObserver').value,
+                    count: parseInt(document.getElementById('faunaCount').value) || 1,
+                    behavior: document.getElementById('faunaBehavior').value,
+                    photos: [],
+                    notes: document.getElementById('faunaNotes').value,
+                    createdAt: new Date().toISOString()
+                };
+
+                db.faunaSightings.push(newSighting);
+
+                // Update species last observed
+                const species = db.species.find(s => s.id === newSighting.speciesId);
+                if (species) {
+                    species.lastObserved = newSighting.date;
+                }
+
+                if (Utils.saveData()) {
+                    form.reset();
+                    form.classList.remove('was-validated');
+                    document.getElementById('faunaPhotoPreview').innerHTML = '';
+                    
+                    bootstrap.Modal.getInstance(document.getElementById('modalFaunaSighting')).hide();
+                    Utils.showToast('Success', 'Fauna sighting saved');
+                    
+                    this.loadSpecies();
+                }
+            },
+
+            saveVegetationSurvey: function() {
+                const form = document.getElementById('formVegetationSurvey');
+                if (!form.checkValidity()) {
+                    form.classList.add('was-validated');
+                    return;
+                }
+
+                const species = Array.from(document.getElementById('vegetationSpecies').selectedOptions)
+                    .map(opt => parseInt(opt.value));
+
+                const newSurvey = {
+                    id: Utils.generateId(),
+                    siteId: db.currentSiteId,
+                    date: document.getElementById('vegetationDate').value,
+                    location: document.getElementById('vegetationLocation').value,
+                    observer: document.getElementById('vegetationObserver').value,
+                    species: species,
+                    nativeCover: parseInt(document.getElementById('vegetationCover').value) || 0,
+                    weedCover: parseInt(document.getElementById('vegetationWeedCover').value) || 0,
+                    health: document.getElementById('vegetationHealth').value,
+                    findings: document.getElementById('vegetationFindings').value,
+                    photos: [],
+                    notes: document.getElementById('vegetationNotes').value,
+                    createdAt: new Date().toISOString()
+                };
+
+                db.vegetationSurveys.push(newSurvey);
+
+                // Update species last observed
+                species.forEach(id => {
+                    const s = db.species.find(sp => sp.id === id);
+                    if (s) s.lastObserved = newSurvey.date;
+                });
+
+                if (Utils.saveData()) {
+                    form.reset();
+                    form.classList.remove('was-validated');
+                    document.getElementById('vegetationPhotoPreview').innerHTML = '';
+                    
+                    bootstrap.Modal.getInstance(document.getElementById('modalVegetationSurvey')).hide();
+                    Utils.showToast('Success', 'Vegetation survey saved');
+                    
+                    this.loadSpecies();
+                }
+            },
+
+            // ==================== EVENT LISTENERS ====================
+            setupEventListeners: function() {
+                // Site selector
+                document.getElementById('siteSelector')?.addEventListener('change', (e) => {
+                    const siteId = parseInt(e.target.value);
+                    if (siteId && siteId !== db.currentSiteId) {
+                        const site = db.sites.find(s => s.id === siteId);
+                        if (site) {
+                            SiteManager.promptSwitchSite(siteId, site.name);
+                        }
+                    }
+                });
+
+                // Confirm switch site
+                document.getElementById('confirmSwitchSiteBtn')?.addEventListener('click', () => {
+                    const siteId = parseInt(document.getElementById('switchTargetSiteId').value);
+                    SiteManager.switchSite(siteId);
+                });
+
+                // Site management
+                document.getElementById('saveSiteBtn')?.addEventListener('click', () => SiteManager.saveSite());
+                document.getElementById('updateSiteBtn')?.addEventListener('click', () => SiteManager.updateSite());
+                
+                // Save buttons
+                document.getElementById('saveAssessmentBtn')?.addEventListener('click', () => this.saveAssessment());
+                document.getElementById('saveActivityBtn')?.addEventListener('click', () => this.saveActivity());
+                document.getElementById('saveSpeciesBtn')?.addEventListener('click', () => this.saveSpecies());
+                document.getElementById('saveMonitoringBtn')?.addEventListener('click', () => this.saveMonitoring());
+                document.getElementById('saveFaunaSightingBtn')?.addEventListener('click', () => this.saveFaunaSighting());
+                document.getElementById('saveVegetationSurveyBtn')?.addEventListener('click', () => this.saveVegetationSurvey());
+                document.getElementById('saveComplianceBtn')?.addEventListener('click', () => this.saveComplianceChecklist());
+                document.getElementById('generateReportBtn')?.addEventListener('click', () => this.generateReportFromModal());
+
+                // Form submissions
+                document.getElementById('settingsUserProfileForm')?.addEventListener('submit', (e) => this.saveUserProfile(e));
+                document.getElementById('settingsPasswordForm')?.addEventListener('submit', (e) => this.changePassword(e));
+
+                // Data management buttons
+                document.getElementById('exportAllDataBtn')?.addEventListener('click', () => this.exportAllData());
+                document.getElementById('backupDatabaseBtn')?.addEventListener('click', () => this.backupDatabase());
+                document.getElementById('resetTestDataBtn')?.addEventListener('click', () => this.resetTestData());
+
+                // Export/Print buttons
+                document.getElementById('exportDashboardBtn')?.addEventListener('click', () => this.exportAllData());
+                document.getElementById('printDashboardBtn')?.addEventListener('click', () => window.print());
+                document.getElementById('exportSpeciesBtn')?.addEventListener('click', () => this.exportAllData());
+                document.getElementById('printSpeciesBtn')?.addEventListener('click', () => window.print());
+
+                // View all buttons
+                document.getElementById('viewAllFaunaBtn')?.addEventListener('click', () => {
+                    document.querySelector('button[data-bs-target="#monitoring"]')?.click();
+                });
+                document.getElementById('viewAllVegetationBtn')?.addEventListener('click', () => {
+                    document.querySelector('button[data-bs-target="#monitoring"]')?.click();
+                });
+
+                // Print buttons in modals
+                document.getElementById('printAssessmentBtn')?.addEventListener('click', () => window.print());
+                document.getElementById('printSpeciesDetailsBtn')?.addEventListener('click', () => window.print());
+                document.getElementById('printActivityBtn')?.addEventListener('click', () => window.print());
+                document.getElementById('printMonitoringBtn')?.addEventListener('click', () => window.print());
+
+                // Generate compliance report
+                document.getElementById('generateComplianceReportBtn')?.addEventListener('click', () => this.generateReport('compliance'));
+
+                // Tab change events
+                document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+                    tab.addEventListener('shown.bs.tab', (e) => {
+                        const target = e.target.getAttribute('data-bs-target');
+                        
+                        if (target === '#dashboard') {
+                            this.loadDashboard();
+                        } else if (target === '#site-assessment') {
+                            this.loadAssessments();
+                        } else if (target === '#maintenance-plan') {
+                            this.loadActivities();
+                            if (window.calendar) window.calendar.refetchEvents();
+                        } else if (target === '#species-register') {
+                            this.loadSpecies();
+                        } else if (target === '#monitoring') {
+                            this.loadMonitoring();
+                        } else if (target === '#reports') {
+                            this.loadReports();
+                        } else if (target === '#legislation') {
+                            this.loadComplianceChecklist();
+                        } else if (target === '#settings') {
+                            this.loadSettings();
+                        }
+                    });
+                });
+
+                // Map layer toggles
+                document.getElementById('zoneToggle')?.addEventListener('click', function() {
+                    if (window.map && window.zonesLayer) {
+                        if (window.map.hasLayer(window.zonesLayer)) {
+                            window.map.removeLayer(window.zonesLayer);
+                            this.classList.remove('active');
+                            this.setAttribute('aria-pressed', 'false');
+                        } else {
+                            window.map.addLayer(window.zonesLayer);
+                            this.classList.add('active');
+                            this.setAttribute('aria-pressed', 'true');
+                        }
+                    }
+                });
+
+                document.getElementById('vegetationToggle')?.addEventListener('click', function() {
+                    if (window.map && window.vegetationLayer) {
+                        if (window.map.hasLayer(window.vegetationLayer)) {
+                            window.map.removeLayer(window.vegetationLayer);
+                            this.classList.remove('active');
+                            this.setAttribute('aria-pressed', 'false');
+                        } else {
+                            window.map.addLayer(window.vegetationLayer);
+                            this.classList.add('active');
+                            this.setAttribute('aria-pressed', 'true');
+                        }
+                    }
+                });
+
+                document.getElementById('weedsToggle')?.addEventListener('click', function() {
+                    if (window.map && window.weedsLayer) {
+                        if (window.map.hasLayer(window.weedsLayer)) {
+                            window.map.removeLayer(window.weedsLayer);
+                            this.classList.remove('active');
+                            this.setAttribute('aria-pressed', 'false');
+                        } else {
+                            window.map.addLayer(window.weedsLayer);
+                            this.classList.add('active');
+                            this.setAttribute('aria-pressed', 'true');
+                        }
+                    }
+                });
+
+                // Image preview handlers
+                document.getElementById('speciesImage')?.addEventListener('change', function(e) {
+                    const preview = document.getElementById('speciesImagePreview');
+                    if (this.files && this.files[0]) {
+                        const url = URL.createObjectURL(this.files[0]);
+                        preview.src = url;
+                        preview.style.display = 'block';
+                        
+                        // Clean up when modal closes
+                        const modal = document.getElementById('modalNewSpecies');
+                        modal.addEventListener('hidden.bs.modal', function() {
+                            URL.revokeObjectURL(url);
+                            preview.style.display = 'none';
+                        }, { once: true });
+                    }
+                });
+
+                // Photo previews for multiple files
+                ['assessment', 'monitoring', 'fauna', 'vegetation'].forEach(prefix => {
+                    const input = document.getElementById(`${prefix}Photos`);
+                    const container = document.getElementById(`${prefix}PhotoPreview`);
+                    
+                    if (input && container) {
+                        input.addEventListener('change', function() {
+                            container.innerHTML = '';
+                            
+                            Array.from(this.files).forEach(file => {
+                                if (file.type.startsWith('image/')) {
+                                    const url = URL.createObjectURL(file);
+                                    const img = document.createElement('img');
+                                    img.src = url;
+                                    img.className = 'image-thumbnail';
+                                    img.alt = 'Preview';
+                                    container.appendChild(img);
+                                    
+                                    // Clean up when modal closes
+                                    const modal = this.closest('.modal');
+                                    if (modal) {
+                                        modal.addEventListener('hidden.bs.modal', function() {
+                                            URL.revokeObjectURL(url);
+                                        }, { once: true });
+                                    }
+                                }
+                            });
+                        });
+                    }
+                });
+
+                // Component validation
+                document.querySelectorAll('#formNewAssessment input[name="components"]').forEach(cb => {
+                    cb.addEventListener('change', function() {
+                        const checked = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
+                        const feedback = document.getElementById('componentsFeedback');
+                        if (feedback) {
+                            feedback.style.display = checked.length === 0 ? 'block' : 'none';
+                        }
+                    });
+                });
+
+                // Modal reset on close
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.addEventListener('hidden.bs.modal', function() {
+                        const form = this.querySelector('form');
+                        if (form) {
+                            form.reset();
+                            form.classList.remove('was-validated');
+                        }
+                        
+                        // Clear previews
+                        this.querySelectorAll('.image-preview-container').forEach(container => {
+                            container.innerHTML = '';
+                        });
+                        
+                        const speciesPreview = this.querySelector('#speciesImagePreview');
+                        if (speciesPreview) {
+                            speciesPreview.style.display = 'none';
+                            speciesPreview.src = '#';
+                        }
+                        
+                        const feedback = this.querySelector('#componentsFeedback');
+                        if (feedback) {
+                            feedback.style.display = 'none';
+                        }
+                    });
+                });
+            }
+        };
+
+        // ==================== INITIALIZE APPLICATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            App.init();
+        });
+
+        // Expose global functions for onclick handlers
+        window.generateReport = function(type) {
+            App.generateReport(type);
+        };
+
+    })();
+</script>
