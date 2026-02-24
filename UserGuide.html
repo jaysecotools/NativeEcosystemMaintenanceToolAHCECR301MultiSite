@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMaintain User Guide | Multi-Site Native Ecosystem Maintenance Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --multi-site-color: #9b59b6;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            position: fixed;
+            width: 250px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            margin: 5px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link i {
+            font-size: 1.1rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .card {
+            margin-bottom: 20px;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 12px;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        .logo {
+            font-weight: 700;
+            padding: 20px;
+            font-size: 1.3rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            letter-spacing: 1px;
+        }
+        
+        .logo i {
+            color: var(--accent-color);
+        }
+        
+        h1, h2, h3, h4, h5 {
+            color: var(--primary-color);
+        }
+        
+        .guide-section {
+            margin-bottom: 40px;
+            scroll-margin-top: 20px;
+        }
+        
+        .feature-icon {
+            font-size: 2rem;
+            color: var(--accent-color);
+            margin-bottom: 15px;
+        }
+        
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .tip-box {
+            background-color: #e8f4fd;
+            border-left: 4px solid var(--accent-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .warning-box {
+            background-color: #fde8e8;
+            border-left: 4px solid var(--danger-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .best-practice {
+            background-color: #e8f8ef;
+            border-left: 4px solid var(--success-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .multi-site-box {
+            background-color: #f3e8ff;
+            border-left: 4px solid var(--multi-site-color);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .multi-site-box h5 {
+            color: var(--multi-site-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .table-features {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .table-features th {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .table-features td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .table-features tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .badge-new {
+            background-color: var(--multi-site-color);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                position: relative;
+                width: 100%;
+                min-height: auto;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        
+        .back-to-top {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .back-to-top:hover {
+            background-color: var(--accent-color);
+            transform: scale(1.1);
+        }
+        
+        .section-nav {
+            position: sticky;
+            top: 20px;
+        }
+        
+        .section-nav .nav-link {
+            color: var(--secondary-color);
+            padding: 8px 15px;
+            border-left: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .section-nav .nav-link:hover, .section-nav .nav-link.active {
+            border-left: 3px solid var(--accent-color);
+            background-color: #f0f0f0;
+            color: var(--primary-color);
+        }
+        
+        .workflow-diagram {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .workflow-step {
+            display: inline-block;
+            width: 100px;
+            height: 100px;
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: 50%;
+            line-height: 100px;
+            margin: 10px;
+            font-weight: bold;
+        }
+        
+        .glossary-term {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .print-only {
+            display: none;
+        }
+        
+        @media print {
+            .sidebar, .back-to-top, .btn-toolbar {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .print-only {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Back to top button -->
+    <button class="back-to-top" id="backToTop" aria-label="Back to top">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar p-0">
+                <div class="logo">
+                    <i class="bi bi-tree-fill me-2"></i>
+                    EcoMaintain Guide
+                </div>
+                <ul class="nav flex-column p-3">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#overview">
+                            <i class="bi bi-house"></i> Overview
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#multi-site">
+                            <i class="bi bi-building"></i> Multi-Site Management <span class="badge-new">New</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#getting-started">
+                            <i class="bi bi-play-circle"></i> Getting Started
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#dashboard">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#site-assessment">
+                            <i class="bi bi-clipboard-data"></i> Site Assessment
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#maintenance-plan">
+                            <i class="bi bi-calendar-check"></i> Maintenance Plan
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#species-register">
+                            <i class="bi bi-tree"></i> Species Register
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#monitoring">
+                            <i class="bi bi-binoculars"></i> Monitoring
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#reports">
+                            <i class="bi bi-file-earmark-text"></i> Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#legislation">
+                            <i class="bi bi-journal-bookmark"></i> Legislation
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#settings">
+                            <i class="bi bi-gear"></i> Settings
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#data-management">
+                            <i class="bi bi-database"></i> Data Management
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#best-practices">
+                            <i class="bi bi-check-circle"></i> Best Practices
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#faq">
+                            <i class="bi bi-question-circle"></i> FAQ
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#troubleshooting">
+                            <i class="bi bi-tools"></i> Troubleshooting
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#glossary">
+                            <i class="bi bi-book"></i> Glossary
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 ms-sm-auto main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <i class="bi bi-tree-fill me-2" style="color: var(--accent-color);"></i>
+                        EcoMaintain Multi-Site User Guide
+                    </h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="window.print()">
+                            <i class="bi bi-printer"></i> Print Guide
+                        </button>
+                        <a href="index.html" class="btn btn-sm btn-primary" target="_blank">
+                            <i class="bi bi-box-arrow-up-right"></i> Launch App
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Overview Section -->
+                <div class="guide-section" id="overview">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-house me-2" style="color: var(--accent-color);"></i>
+                                Overview
+                            </h2>
+                            <p class="card-text">
+                                EcoMaintain is a comprehensive web-based application designed to help environmental professionals manage native ecosystem maintenance activities across multiple sites in compliance with AHCECR301 requirements. The multi-site version allows you to manage an unlimited number of separate conservation areas, each with their own assessments, species records, maintenance activities, and monitoring data.
+                            </p>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-4">
+                                    <div class="text-center mb-3">
+                                        <i class="bi bi-building feature-icon"></i>
+                                        <h5>Multi-Site Support</h5>
+                                        <p>Manage multiple conservation areas independently with easy switching between sites</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center mb-3">
+                                        <i class="bi bi-clipboard-check feature-icon"></i>
+                                        <h5>AHCECR301 Compliant</h5>
+                                        <p>Built specifically to meet the requirements of ecosystem maintenance competency</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center mb-3">
+                                        <i class="bi bi-cloud-off feature-icon"></i>
+                                        <h5>Offline Capable</h5>
+                                        <p>All data stored locally - no internet connection required for core functionality</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <h5>Key Features</h5>
+                                    <ul>
+                                        <li><strong>Multi-site management</strong> - Create and switch between unlimited sites</li>
+                                        <li><strong>Site assessment</strong> - Record ecosystem health and threats</li>
+                                        <li><strong>Maintenance planning</strong> - Schedule and track activities</li>
+                                        <li><strong>Species inventory</strong> - Catalog flora and fauna</li>
+                                        <li><strong>Monitoring</strong> - Record field observations and surveys</li>
+                                        <li><strong>Compliance tracking</strong> - Monitor regulatory requirements</li>
+                                        <li><strong>Reporting</strong> - Generate PDF, Excel, and Word reports</li>
+                                        <li><strong>Interactive mapping</strong> - Visualize site zones and features</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>System Requirements</h5>
+                                    <ul>
+                                        <li>Modern web browser (Chrome, Firefox, Safari, Edge)</li>
+                                        <li>JavaScript enabled</li>
+                                        <li>Recommended screen resolution: 1280x768 or higher</li>
+                                        <li>Internet connection only required for:</li>
+                                        <ul>
+                                            <li>Map tiles (OpenStreetMap)</li>
+                                            <li>External libraries (Bootstrap, Chart.js, etc.)</li>
+                                        </ul>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Multi-Site Management Section -->
+                <div class="guide-section" id="multi-site">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-building me-2" style="color: var(--multi-site-color);"></i>
+                                Multi-Site Management <span class="badge-new">New Feature</span>
+                            </h2>
+                            <p class="card-text">
+                                The multi-site feature allows you to manage multiple conservation areas, properties, or project sites independently. Each site maintains its own separate data while sharing the same application interface.
+                            </p>
+                            
+                            <div class="multi-site-box">
+                                <h5>
+                                    <i class="bi bi-star-fill"></i>
+                                    Key Multi-Site Benefits
+                                </h5>
+                                <ul>
+                                    <li><strong>Complete Isolation:</strong> Data from different sites never mixes</li>
+                                    <li><strong>Easy Switching:</strong> Change between sites with a single click</li>
+                                    <li><strong>Unlimited Sites:</strong> Create as many sites as you need</li>
+                                    <li><strong>Site-Specific Reporting:</strong> Reports automatically filter to current site</li>
+                                    <li><strong>Consistent Templates:</strong> All sites use the same assessment and monitoring forms</li>
+                                </ul>
+                            </div>
+                            
+                            <h4 class="mt-4">Managing Sites</h4>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Adding a New Site</h5>
+                                    <p><span class="step-number">1</span> Navigate to <strong>Settings → Site Management</strong></p>
+                                    <p><span class="step-number">2</span> Click "Add New Site" button</p>
+                                    <p><span class="step-number">3</span> Enter site details:</p>
+                                    <ul>
+                                        <li>Site Name (required)</li>
+                                        <li>Location description</li>
+                                        <li>Area in hectares</li>
+                                        <li>Detailed description</li>
+                                    </ul>
+                                    <p><span class="step-number">4</span> Click "Save Site"</p>
+                                    
+                                    <div class="tip-box mt-3">
+                                        <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> The first site you create becomes your current site automatically. Add descriptive names that clearly identify each location.
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Switching Between Sites</h5>
+                                    <p>There are two ways to switch sites:</p>
+                                    
+                                    <p><strong>Method 1: Site Selector</strong></p>
+                                    <ul>
+                                        <li>Located at the top of the sidebar</li>
+                                        <li>Click the dropdown and select any site</li>
+                                        <li>Confirm the switch in the popup</li>
+                                    </ul>
+                                    
+                                    <p><strong>Method 2: Manage Sites Modal</strong></p>
+                                    <ul>
+                                        <li>Go to Settings → Manage Sites</li>
+                                        <li>Click the <i class="bi bi-arrow-right-circle"></i> button next to any site</li>
+                                        <li>Confirm to switch immediately</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <h4 class="mt-4">Editing and Deleting Sites</h4>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Edit Site Details</h5>
+                                    <p><span class="step-number">1</span> Open Manage Sites modal</p>
+                                    <p><span class="step-number">2</span> Click the <i class="bi bi-pencil"></i> button next to a site</p>
+                                    <p><span class="step-number">3</span> Update any information</p>
+                                    <p><span class="step-number">4</span> Click "Update Site"</p>
+                                    <p>Changes apply immediately and are reflected throughout the application.</p>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Delete a Site</h5>
+                                    <p><span class="step-number">1</span> Open Manage Sites modal</p>
+                                    <p><span class="step-number">2</span> Click the <i class="bi bi-trash"></i> button</p>
+                                    <p><span class="step-number">3</span> Confirm deletion</p>
+                                    
+                                    <div class="warning-box">
+                                        <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> Deleting a site permanently removes ALL associated data (assessments, species, activities, monitoring). This action cannot be undone.
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h4 class="mt-4">Site Identification</h4>
+                            <p>The current site is always clearly indicated throughout the application:</p>
+                            <ul>
+                                <li><strong>Site Badge:</strong> Colored badge appears next to section titles</li>
+                                <li><strong>Site Selector:</strong> Shows current site name in the sidebar</li>
+                                <li><strong>Dashboard Header:</strong> Displays current site name prominently</li>
+                                <li><strong>All Data Views:</strong> Tables and cards only show data for current site</li>
+                            </ul>
+                            
+                            <div class="best-practice">
+                                <i class="bi bi-check-circle"></i> <strong>Best Practice:</strong> Before entering new data, always check the site selector to ensure you're working in the correct site. The site badge provides a quick visual confirmation.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Getting Started Section (Updated) -->
+                <div class="guide-section" id="getting-started">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-play-circle me-2" style="color: var(--accent-color);"></i>
+                                Getting Started
+                            </h2>
+                            
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h4>Initial Setup Workflow</h4>
+                                    
+                                    <div class="workflow-diagram">
+                                        <div class="d-flex flex-wrap justify-content-center">
+                                            <div class="workflow-step">1</div>
+                                            <i class="bi bi-arrow-right h2 mx-2"></i>
+                                            <div class="workflow-step">2</div>
+                                            <i class="bi bi-arrow-right h2 mx-2"></i>
+                                            <div class="workflow-step">3</div>
+                                            <i class="bi bi-arrow-right h2 mx-2"></i>
+                                            <div class="workflow-step">4</div>
+                                        </div>
+                                        <p class="mt-3">
+                                            <strong>Create Site → Configure Profile → Add Data → Generate Reports</strong>
+                                        </p>
+                                    </div>
+                                    
+                                    <p><span class="step-number">1</span> <strong>Create Your First Site:</strong></p>
+                                    <ul>
+                                        <li>Go to Settings → Site Management</li>
+                                        <li>Click "Add New Site" and enter your site details</li>
+                                        <li>The site will be automatically selected as current</li>
+                                    </ul>
+                                    
+                                    <p><span class="step-number">2</span> <strong>Configure User Profile (Global):</strong></p>
+                                    <ul>
+                                        <li>Navigate to Settings tab</li>
+                                        <li>Enter your name, email, and role</li>
+                                        <li>This information is used in reports and activity logs</li>
+                                    </ul>
+                                    
+                                    <p><span class="step-number">3</span> <strong>Review Sample Data:</strong></p>
+                                    <ul>
+                                        <li>Explore the default site with sample assessments and species</li>
+                                        <li>Use this data to understand how the application works</li>
+                                        <li>Delete or edit sample records as needed</li>
+                                    </ul>
+                                    
+                                    <p><span class="step-number">4</span> <strong>Create Additional Sites (Optional):</strong></p>
+                                    <ul>
+                                        <li>Repeat the site creation process for each location</li>
+                                        <li>Switch between sites to manage each independently</li>
+                                    </ul>
+                                    
+                                    <div class="tip-box">
+                                        <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Take time to explore all sections while viewing the sample data. This helps understand how data is organized and displayed for each site.
+                                    </div>
+                                    
+                                    <h4 class="mt-4">Navigation</h4>
+                                    <p>The application uses a tab-based navigation system with site context awareness:</p>
+                                    <ul>
+                                        <li><strong>Dashboard:</strong> Site-specific overview of key metrics and recent activities</li>
+                                        <li><strong>Site Assessment:</strong> Assessments for current site only</li>
+                                        <li><strong>Maintenance Plan:</strong> Activities scheduled for current site</li>
+                                        <li><strong>Species Register:</strong> Species inventory for current site</li>
+                                        <li><strong>Monitoring:</strong> Observations recorded at current site</li>
+                                        <li><strong>Reports:</strong> Site-specific report generation</li>
+                                        <li><strong>Legislation:</strong> Global reference information</li>
+                                        <li><strong>Settings:</strong> User profile (global) and site management</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="section-nav">
+                                        <h5>Quick Navigation</h5>
+                                        <nav class="nav flex-column">
+                                            <a class="nav-link" href="#multi-site">Multi-Site Guide</a>
+                                            <a class="nav-link" href="#dashboard">Dashboard</a>
+                                            <a class="nav-link" href="#site-assessment">Site Assessment</a>
+                                            <a class="nav-link" href="#maintenance-plan">Maintenance</a>
+                                            <a class="nav-link" href="#species-register">Species</a>
+                                            <a class="nav-link" href="#reports">Reports</a>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Section (Updated) -->
+                <div class="guide-section" id="dashboard">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-speedometer2 me-2" style="color: var(--accent-color);"></i>
+                                Dashboard
+                            </h2>
+                            <p class="card-text">
+                                The dashboard provides a site-specific overview of your ecosystem management activities. All data shown is filtered to the currently selected site.
+                            </p>
+                            
+                            <div class="multi-site-box">
+                                <h5>
+                                    <i class="bi bi-info-circle"></i>
+                                    Site Context
+                                </h5>
+                                <p>The dashboard header shows which site you're currently viewing. All statistics and widgets display data only from this site.</p>
+                            </div>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h5>Key Components</h5>
+                                    <ul>
+                                        <li><strong>Statistics Panel:</strong> Upcoming tasks, assessments, species, compliance (site-specific)</li>
+                                        <li><strong>Upcoming Tasks:</strong> Scheduled activities for current site</li>
+                                        <li><strong>Site Health Indicators:</strong> Visual health metrics for current site</li>
+                                        <li><strong>Recent Observations:</strong> Latest monitoring records for current site</li>
+                                        <li><strong>Interactive Map:</strong> Geographic view with site-specific zone overlays</li>
+                                        <li><strong>Compliance Checklist:</strong> Global compliance tracking (same across all sites)</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>Using the Dashboard</h5>
+                                    <p>The dashboard helps you:</p>
+                                    <ul>
+                                        <li>Quickly assess current priorities for each site</li>
+                                        <li>Monitor compliance progress globally</li>
+                                        <li>Access recent site-specific activities</li>
+                                        <li>Switch between sites to compare status</li>
+                                        <li>Export or print site-specific dashboard views</li>
+                                    </ul>
+                                    
+                                    <div class="tip-box">
+                                        <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Use the export function to create quick status reports for individual sites. The dashboard automatically includes the site name in exports.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Site Assessment Section (Updated) -->
+                <div class="guide-section" id="site-assessment">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-clipboard-data me-2" style="color: var(--accent-color);"></i>
+                                Site Assessment
+                            </h2>
+                            <p class="card-text">
+                                Conduct and record comprehensive site assessments for each of your management areas. All assessments are automatically linked to the current site.
+                            </p>
+                            
+                            <div class="multi-site-box">
+                                <h5>
+                                    <i class="bi bi-building"></i>
+                                    Site-Specific Assessments
+                                </h5>
+                                <p>When you create a new assessment, it's automatically assigned to the currently selected site. The site badge confirms which site you're assessing.</p>
+                            </div>
+                            
+                            <h4>Creating a New Assessment</h4>
+                            <p><span class="step-number">1</span> Verify you're in the correct site using the site selector or badge</p>
+                            <p><span class="step-number">2</span> Click the "New Assessment" button</p>
+                            <p><span class="step-number">3</span> Complete the assessment form:</p>
+                            <ul>
+                                <li>Assessment date and assessor name</li>
+                                <li>Site description and conditions</li>
+                                <li>Ecosystem components present (flora, fauna, soil, water, etc.)</li>
+                                <li>Overall ecosystem health rating</li>
+                                <li>Identified threats</li>
+                                <li>Supporting photos (optional)</li>
+                            </ul>
+                            <p><span class="step-number">4</span> Save the assessment</p>
+                            
+                            <h4 class="mt-4">Viewing Assessments by Site</h4>
+                            <p>The assessments table only shows records for the current site:</p>
+                            <ul>
+                                <li>Switch sites to view assessments from different locations</li>
+                                <li>Click "View" to see detailed assessment information</li>
+                                <li>Compare assessments over time for the same site</li>
+                                <li>Export site-specific assessment reports</li>
+                            </ul>
+                            
+                            <div class="best-practice">
+                                <i class="bi bi-check-circle"></i> <strong>Best Practice:</strong> Conduct assessments quarterly or after significant events. Use consistent methodology for comparable results across different sites.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maintenance Plan Section (Updated) -->
+                <div class="guide-section" id="maintenance-plan">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-calendar-check me-2" style="color: var(--accent-color);"></i>
+                                Maintenance Plan
+                            </h2>
+                            <p class="card-text">
+                                Schedule, track, and manage maintenance activities for each site independently. Activities are always associated with the site where they were created.
+                            </p>
+                            
+                            <h4>Creating Site-Specific Activities</h4>
+                            <p><span class="step-number">1</span> Ensure you're in the correct site</p>
+                            <p><span class="step-number">2</span> Click "New Activity"</p>
+                            <p><span class="step-number">3</span> Fill in activity details:</p>
+                            <ul>
+                                <li>Activity type (weed control, revegetation, erosion control, etc.)</li>
+                                <li>Title and description</li>
+                                <li>Start and end dates</li>
+                                <li>Location within the site</li>
+                                <li>Assigned personnel</li>
+                                <li>Priority level</li>
+                                <li>Initial status</li>
+                            </ul>
+                            <p><span class="step-number">4</span> Save the activity</p>
+                            
+                            <h4 class="mt-4">Viewing Activities by Site</h4>
+                            <p>Activities are organized in three tabs, all filtered to current site:</p>
+                            <ul>
+                                <li><strong>Upcoming:</strong> Planned and in-progress activities</li>
+                                <li><strong>Completed:</strong> Finished activities</li>
+                                <li><strong>Overdue:</strong> Past-due activities</li>
+                            </ul>
+                            
+                            <h4>Calendar View</h4>
+                            <p>The maintenance calendar shows activities for the current site only:</p>
+                            <ul>
+                                <li>Color-coded by activity type</li>
+                                <li>Click events for details</li>
+                                <li>Switch between month, week, and day views</li>
+                                <li>Calendar updates automatically when switching sites</li>
+                            </ul>
+                            
+                            <div class="tip-box">
+                                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Use the calendar to identify scheduling conflicts across different activities within the same site. The site selector lets you check schedules for different locations.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Species Register Section (Updated) -->
+                <div class="guide-section" id="species-register">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-tree me-2" style="color: var(--accent-color);"></i>
+                                Species Register
+                            </h2>
+                            <p class="card-text">
+                                Maintain comprehensive species inventories for each site. Species records are site-specific, allowing you to track different species compositions across your management areas.
+                            </p>
+                            
+                            <h4>Adding Site-Specific Species</h4>
+                            <p><span class="step-number">1</span> Select the correct site</p>
+                            <p><span class="step-number">2</span> Click "New Species"</p>
+                            <p><span class="step-number">3</span> Enter species information:</p>
+                            <ul>
+                                <li>Scientific name (required) and common name</li>
+                                <li>Type (flora, fauna, fungi, other)</li>
+                                <li>Conservation status</li>
+                                <li>Description and habitat</li>
+                                <li>Last observation date</li>
+                                <li>Images for identification</li>
+                            </ul>
+                            <p><span class="step-number">4</span> Save the species record</p>
+                            
+                            <h4 class="mt-4">Viewing Species by Site</h4>
+                            <p>Species can be viewed in two formats, both filtered to current site:</p>
+                            <ul>
+                                <li><strong>Card View:</strong> Visual presentation with images, ideal for field reference</li>
+                                <li><strong>Table View:</strong> Comprehensive list with filtering and sorting</li>
+                            </ul>
+                            
+                            <h4>Site-Specific Dropdowns</h4>
+                            <p>Species dropdowns in monitoring forms automatically show only species from the current site, ensuring data consistency:</p>
+                            <ul>
+                                <li>Monitoring species selection</li>
+                                <li>Fauna sighting species selection</li>
+                                <li>Vegetation survey species selection</li>
+                            </ul>
+                            
+                            <div class="best-practice">
+                                <i class="bi bi-check-circle"></i> <strong>Best Practice:</strong> Record species as you encounter them during assessments and monitoring. Update last observed dates regularly. Use consistent naming conventions across all sites.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monitoring Section (Updated) -->
+                <div class="guide-section" id="monitoring">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-binoculars me-2" style="color: var(--accent-color);"></i>
+                                Monitoring
+                            </h2>
+                            <p class="card-text">
+                                Record field observations and surveys for each site. Monitoring records are automatically linked to the site where they're created.
+                            </p>
+                            
+                            <h4>Creating Site-Specific Monitoring Records</h4>
+                            <p><span class="step-number">1</span> Verify current site selection</p>
+                            <p><span class="step-number">2</span> Click "New Monitoring"</p>
+                            <p><span class="step-number">3</span> Complete the monitoring form:</p>
+                            <ul>
+                                <li>Monitoring type (fauna survey, vegetation survey, etc.)</li>
+                                <li>Date and location within site</li>
+                                <li>Observer name</li>
+                                <li>Detailed findings</li>
+                                <li>Species observed (from current site's species list)</li>
+                                <li>Photos and notes</li>
+                            </ul>
+                            <p><span class="step-number">4</span> Save the monitoring record</p>
+                            
+                            <h4 class="mt-4">Specialized Monitoring Forms</h4>
+                            
+                            <h5>Fauna Sightings</h5>
+                            <ul>
+                                <li>Record specific animal observations</li>
+                                <li>Species dropdown shows only fauna from current site</li>
+                                <li>Track behavior and population counts</li>
+                                <li>Automatically updates species last observed date</li>
+                            </ul>
+                            
+                            <h5>Vegetation Surveys</h5>
+                            <ul>
+                                <li>Document plant cover percentages</li>
+                                <li>Record health ratings</li>
+                                <li>Species selection limited to current site's flora</li>
+                                <li>Tracks changes in vegetation composition</li>
+                            </ul>
+                            
+                            <h4>Viewing Monitoring History</h4>
+                            <p>The monitoring table shows only records from the current site:</p>
+                            <ul>
+                                <li>Browse all monitoring records for the selected site</li>
+                                <li>Filter by type, date, or location</li>
+                                <li>Click "View" for complete details</li>
+                                <li>Compare monitoring data across different sites</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Section (Updated) -->
+                <div class="guide-section" id="reports">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-file-earmark-text me-2" style="color: var(--accent-color);"></i>
+                                Reports
+                            </h2>
+                            <p class="card-text">
+                                Generate comprehensive reports for individual sites or across your organization. Reports can be site-specific or include compliance data from all sites.
+                            </p>
+                            
+                            <div class="multi-site-box">
+                                <h5>
+                                    <i class="bi bi-file-earmark"></i>
+                                    Report Types
+                                </h5>
+                                <ul>
+                                    <li><strong>Site-Specific Reports:</strong> Data only from current site (Maintenance, Monitoring, Health Trends)</li>
+                                    <li><strong>Global Reports:</strong> Compliance data from all sites (Compliance Report)</li>
+                                </ul>
+                            </div>
+                            
+                            <h4>Available Report Types</h4>
+                            <table class="table-features">
+                                <thead>
+                                    <tr>
+                                        <th>Report Type</th>
+                                        <th>Scope</th>
+                                        <th>Key Information</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Compliance Report</strong></td>
+                                        <td>Global (all sites)</td>
+                                        <td>Checklist status, evidence, compliance percentage</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Maintenance Summary</strong></td>
+                                        <td>Current site only</td>
+                                        <td>Activities, status, resource allocation</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Monitoring Summary</strong></td>
+                                        <td>Current site only</td>
+                                        <td>Survey results, species observations, trends</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Ecosystem Health Trend</strong></td>
+                                        <td>Current site only</td>
+                                        <td>Assessment history, health indicators, changes</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Threat Management</strong></td>
+                                        <td>Current site only</td>
+                                        <td>Threats, control measures, effectiveness</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h4 class="mt-4">Generating Site-Specific Reports</h4>
+                            <p><span class="step-number">1</span> Select the desired site using the site selector</p>
+                            <p><span class="step-number">2</span> Navigate to Reports tab</p>
+                            <p><span class="step-number">3</span> Choose report type (site-specific reports will use current site data)</p>
+                            <p><span class="step-number">4</span> Set date range (optional)</p>
+                            <p><span class="step-number">5</span> Select output format (PDF, Excel, Word)</p>
+                            <p><span class="step-number">6</span> Generate and download report</p>
+                            
+                            <h4>Previous Reports</h4>
+                            <p>The reports table shows all generated reports, organized by site:</p>
+                            <ul>
+                                <li>Each report includes the site name in its metadata</li>
+                                <li>Filter by site using the site selector</li>
+                                <li>View or download previously generated reports</li>
+                            </ul>
+                            
+                            <div class="tip-box">
+                                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Generate compliance reports quarterly to track progress across all sites. Use site-specific reports for individual site reviews and annual planning.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Section (Updated) -->
+                <div class="guide-section" id="settings">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-gear me-2" style="color: var(--accent-color);"></i>
+                                Settings
+                            </h2>
+                            <p class="card-text">
+                                Configure global user settings and manage all your sites from the Settings tab.
+                            </p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h4>User Profile (Global)</h4>
+                                    <p>Settings that apply across all sites:</p>
+                                    <ul>
+                                        <li>Full name (appears in reports and activity logs)</li>
+                                        <li>Email address</li>
+                                        <li>User role (administrator, ecologist, field technician, volunteer)</li>
+                                        <li>Password (for future authentication features)</li>
+                                    </ul>
+                                    
+                                    <h4 class="mt-4">Site Management</h4>
+                                    <p>Tools for managing all your sites:</p>
+                                    <ul>
+                                        <li><strong>Manage Sites:</strong> View, edit, delete all sites</li>
+                                        <li><strong>Add New Site:</strong> Create new management areas</li>
+                                        <li><strong>Site Statistics:</strong> See record counts per site</li>
+                                        <li><strong>Quick Switch:</strong> Change sites directly from settings</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h4>System Information</h4>
+                                    <p>Monitor your application usage:</p>
+                                    <ul>
+                                        <li><strong>Version:</strong> Current software version (Multi-site)</li>
+                                        <li><strong>Last Backup:</strong> Date of last data backup</li>
+                                        <li><strong>Storage Used:</strong> Total storage consumption</li>
+                                        <li><strong>Records Count:</strong> Total records across all sites</li>
+                                        <li><strong>Sites Count:</strong> Number of sites managed</li>
+                                    </ul>
+                                    
+                                    <div class="tip-box">
+                                        <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Regularly check the System Information to monitor your data volume and plan for backups.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Management Section (Updated) -->
+                <div class="guide-section" id="data-management">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-database me-2" style="color: var(--accent-color);"></i>
+                                Data Management
+                            </h2>
+                            <p class="card-text">
+                                Understand how EcoMaintain stores and manages your multi-site data.
+                            </p>
+                            
+                            <h4>Storage Architecture</h4>
+                            <ul>
+                                <li>All data stored locally in browser's localStorage</li>
+                                <li>Each site's data is stored with site ID references</li>
+                                <li>No server connection required - completely offline capable</li>
+                                <li>Data persists between sessions on the same device</li>
+                            </ul>
+                            
+                            <h4>Backup and Export</h4>
+                            <p>To prevent data loss across all sites:</p>
+                            <ul>
+                                <li><strong>Export All Data:</strong> Creates a JSON backup of ALL sites and data</li>
+                                <li><strong>Backup Database:</strong> Timestamped backup for recovery</li>
+                                <li><strong>Individual Exports:</strong> Export site-specific data from each section</li>
+                            </ul>
+                            
+                            <h4>Data Integrity</h4>
+                            <p>Multi-site data integrity features:</p>
+                            <ul>
+                                <li>All records automatically tagged with site ID</li>
+                                <li>Form validation ensures required fields complete</li>
+                                <li>Site-specific dropdowns prevent cross-site data mixing</li>
+                                <li>Data relationships maintained within each site</li>
+                            </ul>
+                            
+                            <div class="warning-box">
+                                <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> The "Reset Test Data" function will delete ALL data across ALL sites. Always export a backup before using this feature.
+                            </div>
+                            
+                            <div class="tip-box">
+                                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Schedule regular exports (weekly/monthly) and store backups securely. This protects against accidental data loss or browser storage clearing.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Best Practices Section (Updated) -->
+                <div class="guide-section" id="best-practices">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-check-circle me-2" style="color: var(--success-color);"></i>
+                                Multi-Site Best Practices
+                            </h2>
+                            
+                            <h4>Site Organization</h4>
+                            <ul>
+                                <li><strong>Naming Convention:</strong> Use consistent naming (e.g., "Blue Mountains - North", "Blue Mountains - South")</li>
+                                <li><strong>Site Boundaries:</strong> Clearly define site areas to avoid data overlap</li>
+                                <li><strong>Hierarchy:</strong> Create separate sites for distinct management areas, not sub-zones</li>
+                            </ul>
+                            
+                            <h4>Data Entry Workflow</h4>
+                            <ul>
+                                <li><strong>Verify Site First:</strong> Always check site selector before entering data</li>
+                                <li><strong>Batch Processing:</strong> Complete all entries for one site before switching</li>
+                                <li><strong>Cross-Site Reference:</strong> Use reports to compare data across sites</li>
+                            </ul>
+                            
+                            <h4>Monitoring Consistency</h4>
+                            <ul>
+                                <li>Use the same assessment methods across all sites for comparability</li>
+                                <li>Standardize threat categories and health ratings</li>
+                                <li>Maintain consistent species naming conventions</li>
+                            </ul>
+                            
+                            <h4>Reporting Strategy</h4>
+                            <ul>
+                                <li>Generate site-specific reports for individual management reviews</li>
+                                <li>Use compliance reports for organization-wide tracking</li>
+                                <li>Archive reports by site and date for historical reference</li>
+                            </ul>
+                            
+                            <div class="best-practice">
+                                <i class="bi bi-check-circle"></i> <strong>Pro Tip:</strong> Create a "master site" template with standard species and activity types, then duplicate by entering similar data in new sites. This ensures consistency across your organization.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ Section (New) -->
+                <div class="guide-section" id="faq">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-question-circle me-2" style="color: var(--accent-color);"></i>
+                                Frequently Asked Questions
+                            </h2>
+                            
+                            <div class="accordion" id="faqAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                            How many sites can I create?
+                                        </button>
+                                    </h2>
+                                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                                        <div class="accordion-body">
+                                            There's no technical limit to the number of sites you can create. The only constraint is your browser's localStorage capacity (typically 5-10MB). Each site with moderate data uses about 50-100KB, so you can manage 50-100 sites comfortably.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                            Can I share data between sites?
+                                        </button>
+                                    </h2>
+                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                        <div class="accordion-body">
+                                            Data is intentionally isolated between sites to maintain integrity. However, you can use species information as a reference when adding similar species to new sites. For organization-wide standards, maintain a separate reference document.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                            What happens to site data when I delete a site?
+                                        </button>
+                                    </h2>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                        <div class="accordion-body">
+                                            All data associated with that site (assessments, species, activities, monitoring, reports) is permanently deleted. This action cannot be undone. Always export a backup before deleting important sites.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                            Can I merge two sites?
+                                        </button>
+                                    </h2>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                        <div class="accordion-body">
+                                            There's no built-in merge function. To combine sites, export data from both, manually consolidate in a spreadsheet, then recreate in a new site. For significant data volumes, consider if maintaining separate sites better serves your management needs.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                            How do I back up all my sites?
+                                        </button>
+                                    </h2>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                        <div class="accordion-body">
+                                            Use the "Export All Data" button in Settings → Data Management. This creates a JSON file containing ALL sites and their data. Store this file securely. To restore, you would need to manually re-import (future feature).
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Troubleshooting Section (Updated) -->
+                <div class="guide-section" id="troubleshooting">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-tools me-2" style="color: var(--accent-color);"></i>
+                                Troubleshooting
+                            </h2>
+                            
+                            <h4>Multi-Site Specific Issues</h4>
+                            
+                            <h5>Assessments Not Showing in Correct Site</h5>
+                            <ul>
+                                <li>Verify you're viewing the correct site using the site selector</li>
+                                <li>Check that the assessment was created while that site was selected</li>
+                                <li>Open the assessment details to confirm the site ID</li>
+                            </ul>
+                            
+                            <h5>Species Missing from Dropdowns</h5>
+                            <ul>
+                                <li>Ensure you're in the correct site</li>
+                                <li>Verify species were created for this site, not another</li>
+                                <li>Check species type matches dropdown type (fauna vs flora)</li>
+                            </ul>
+                            
+                            <h5>Calendar Shows Wrong Activities</h5>
+                            <ul>
+                                <li>Calendar always shows activities for current site only</li>
+                                <li>Refresh calendar after switching sites</li>
+                                <li>Check activity site assignment in details view</li>
+                            </ul>
+                            
+                            <h4>General Issues</h4>
+                            
+                            <h5>Data Not Saving</h5>
+                            <ul>
+                                <li>Check that all required fields are completed</li>
+                                <li>Ensure browser has localStorage enabled</li>
+                                <li>Try refreshing the page</li>
+                                <li>Check storage quota (Settings → System Information)</li>
+                            </ul>
+                            
+                            <h5>Map Not Loading</h5>
+                            <ul>
+                                <li>Verify internet connection (map tiles require internet)</li>
+                                <li>Check if mapping services are blocked</li>
+                                <li>Refresh the page</li>
+                            </ul>
+                            
+                            <h4>Performance Tips</h4>
+                            <ul>
+                                <li>Limit photos per record to maintain performance</li>
+                                <li>Export and archive old data periodically</li>
+                                <li>Use table filtering for large datasets</li>
+                                <li>Consider splitting very large sites into smaller ones</li>
+                            </ul>
+                            
+                            <div class="warning-box">
+                                <i class="bi bi-exclamation-triangle"></i> <strong>Support:</strong> For persistent issues, export your data and contact your system administrator. Include the export file when reporting bugs.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Glossary Section (New) -->
+                <div class="guide-section" id="glossary">
+                    <div class="card">
+                        <div class="card-body">
+                            <h2 class="card-title">
+                                <i class="bi bi-book me-2" style="color: var(--accent-color);"></i>
+                                Glossary
+                            </h2>
+                            
+                            <dl class="row">
+                                <dt class="col-sm-3 glossary-term">Site</dt>
+                                <dd class="col-sm-9">A distinct management area or conservation property with its own ecosystem characteristics and management requirements.</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Current Site</dt>
+                                <dd class="col-sm-9">The actively selected site whose data is currently being viewed or edited.</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Site Badge</dt>
+                                <dd class="col-sm-9">Colored indicator showing which site's data is currently displayed.</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Global Settings</dt>
+                                <dd class="col-sm-9">User preferences that apply across all sites (profile, password).</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Site-Specific Data</dt>
+                                <dd class="col-sm-9">Records (assessments, species, activities) that belong to a particular site.</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Site Selector</dt>
+                                <dd class="col-sm-9">Dropdown menu in sidebar used to switch between sites.</dd>
+                                
+                                <dt class="col-sm-3 glossary-term">Multi-Site Export</dt>
+                                <dd class="col-sm-9">JSON file containing all data from all sites for backup purposes.</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="text-center text-muted py-4">
+                    <p>EcoMaintain Multi-Site Version 1.0 | AHCECR301 Compliant | Updated February 2026</p>
+                    <p>
+                        <i class="bi bi-building me-1"></i> Manage unlimited sites |
+                        <i class="bi bi-file-earmark-text me-1 ms-2"></i> Comprehensive reporting |
+                        <i class="bi bi-map me-1 ms-2"></i> Interactive mapping
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Back to top functionality
+        document.getElementById('backToTop').addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        
+        // Show/hide back to top button based on scroll position
+        window.addEventListener('scroll', function() {
+            const backToTopButton = document.getElementById('backToTop');
+            if (window.pageYOffset > 300) {
+                backToTopButton.style.display = 'flex';
+            } else {
+                backToTopButton.style.display = 'none';
+            }
+        });
+        
+        // Update active navigation based on scroll position
+        window.addEventListener('scroll', function() {
+            const sections = document.querySelectorAll('.guide-section');
+            const navLinks = document.querySelectorAll('.sidebar .nav-link');
+            
+            let currentSection = '';
+            
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (window.pageYOffset >= sectionTop - 100) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+            
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + currentSection) {
+                    link.classList.add('active');
+                }
+            });
+        });
+        
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetSection = document.querySelector(targetId);
+                window.scrollTo({
+                    top: targetSection.offsetTop - 20,
+                    behavior: 'smooth'
+                });
+            });
+        });
+        
+        // Add version info to footer
+        document.addEventListener('DOMContentLoaded', function() {
+            const footer = document.querySelector('.text-muted p:first-child');
+            if (footer) {
+                const now = new Date();
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+                footer.innerHTML = `EcoMaintain Multi-Site Version 1.0 | AHCECR301 Compliant | Updated ${dateStr}`;
+            }
+        });
+    </script>
+</body>
+</html>
