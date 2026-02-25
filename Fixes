@@ -1,9 +1,4 @@
-The issue is that the site initialization is happening before the DOM is fully ready, and there's a missing method in the App object. Let me provide you with a comprehensive fix for all the issues:
-
-Find and replace your entire initMap function with this corrected version:
-
-```javascript
-initMap: function() {
+ initMap: function() {
     console.log('Initializing map...');
     
     const mapContainer = document.getElementById('map');
@@ -53,6 +48,7 @@ initMap: function() {
     }
     
     try {
+
         // Create new map instance
         window.map = L.map('map', {
             center: mapData.center || [-33.7, 150.3],
@@ -224,62 +220,73 @@ initMap: function() {
         mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load. See console for details.</div>';
     }
 },
-```
 
-Also, make sure the addSampleZones method is properly defined. Find and replace it with:
+                updateMapForCurrentSite: function() {
+                    this.initMap();
+                },
 
-```javascript
-addSampleZones: function(mapData) {
-    // Add default zones for Blue Mountains
-    const center = mapData.center || [-33.7, 150.3];
-    
-    mapData.zones = [
-        {
-            name: 'Zone 1 - Native Forest',
-            coords: [
-                [center[0] - 0.02, center[1] - 0.02],
-                [center[0] - 0.02, center[1] + 0.02],
-                [center[0] + 0.02, center[1] + 0.02],
-                [center[0] + 0.02, center[1] - 0.02]
-            ],
-            color: '#3498db'
-        },
-        {
-            name: 'Zone 2 - Wetland Area',
-            coords: [
-                [center[0] + 0.03, center[1] - 0.03],
-                [center[0] + 0.03, center[1] + 0.01],
-                [center[0] + 0.07, center[1] + 0.01],
-                [center[0] + 0.07, center[1] - 0.03]
-            ],
-            color: '#27ae60'
-        }
-    ];
-    
-    mapData.vegetationMarkers = [
-        { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [center[0] - 0.01, center[1] + 0.01] },
-        { name: 'Acacia melanoxylon (Blackwood)', coords: [center[0] + 0.01, center[1] - 0.01] }
-    ];
-    
-    mapData.weedMarkers = [
-        { name: 'Rubus fruticosus (Blackberry)', coords: [center[0] + 0.02, center[1] + 0.02] }
-    ];
-},
-```
+                initCalendar: function() {
+                    const calendarEl = document.getElementById('calendar');
+                    if (!calendarEl) return;
 
-And finally, add this missing method to the App object. Find the createMapLayers method (around line 3400) and replace it with:
+                    try {
+                        if (typeof FullCalendar === 'undefined') {
+                            calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                            return;
+                        }
 
-```javascript
-createMapLayers: function(mapData) {
-    // This method is now handled in initMap
-    console.log('Creating map layers');
-},
-```
+                        const events = Utils.filterByCurrentSite(db.activities).map(activity => {
+                            if (!activity) return null;
+                            return {
+                                id: activity.id.toString(),
+                                title: activity.title,
+                                start: activity.startDate,
+                                end: activity.endDate || activity.startDate,
+                                extendedProps: {
+                                    type: activity.type,
+                                    location: activity.location,
+                                    assignedTo: activity.assignedTo,
+                                    status: activity.status
+                                },
+                                backgroundColor: this.getActivityColor(activity.type),
+                                borderColor: this.getActivityColor(activity.type),
+                                textColor: '#fff'
+                            };
+                        }).filter(e => e !== null);
 
-The main issues were:
+                        window.calendar = new FullCalendar.Calendar(calendarEl, {
+                            initialView: 'dayGridMonth',
+                            headerToolbar: {
+                                left: 'prev,next today',
+                                center: 'title',
+                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                            },
+                            events: events,
+                            eventClick: function(info) {
+                                const activity = db.activities.find(a => a && a.id.toString() === info.event.id);
+                                if (activity) {
+                                    App.showActivityDetails(activity);
+                                }
+                            },
+                            height: 600,
+                            stickyHeaderDates: true
+                        });
 
-1. The createMapLayers method was referenced but not properly defined
-2. The layer groups (zonesLayer, vegetationLayer, weedsLayer) weren't being created before use
-3. The sample zones weren't being properly added to the map
+                        window.calendar.render();
+                    } catch (error) {
+                        console.error('Error initializing calendar:', error);
+                        calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                    }
+                },
 
-These fixes should get your map working again with all the sample data visible.
+                getActivityColor: function(type) {
+                    const colors = {
+                        'weed-control': '#dc3545',
+                        'revegetation': '#28a745',
+                        'erosion-control': '#fd7e14',
+                        'fauna-survey': '#17a2b8',
+                        'vegetation-survey': '#20c997',
+                        'water-quality': '#007bff'
+                    };
+                    return colors[type] || '#6c757d';
+                },
