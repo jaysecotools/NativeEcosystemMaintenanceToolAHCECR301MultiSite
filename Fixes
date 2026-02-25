@@ -1,80 +1,123 @@
-Looking at your code, I can see the issue with the map. The problem is in the map initialization timing and a missing CSS class. Here's the fix:
+You're right. Looking deeper, the issue is that Leaflet needs the map container to be visible when initialized, but it's inside a tab that's not visible at startup. Here's the fix:
 
-Replace this section in your CSS (around line 136):
+Replace the initMap function in your JavaScript (around line 1790) with this:
 
-```css
-/* Fix map container */
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-}
+```javascript
+initMap: function() {
+    console.log('Initializing map...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found');
+        return;
+    }
 
-#map {
-    height: 100%;
-    width: 100%;
-    border-radius: 8px;
-    background: #f8f9fa; /* Fallback background */
-}
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
+    
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+        return;
+    }
+    
+    let mapData = db.siteMaps[siteId];
+    if (!mapData) {
+        mapData = Utils.generateSiteLocation(siteId);
+        db.siteMaps[siteId] = mapData;
+        Utils.saveData();
+    }
+    
+    try {
+        // Clean up existing map
+        if (window.map) {
+            window.map.remove();
+            window.map = null;
+        }
+        
+        // Ensure container has proper dimensions
+        mapContainer.style.height = '500px';
+        mapContainer.style.width = '100%';
+        
+        // Clear any existing content
+        mapContainer.innerHTML = '';
+        
+        // Check if Leaflet is available
+        if (typeof L === 'undefined') {
+            mapContainer.innerHTML = '<div class="alert alert-warning">Leaflet library not loaded.</div>';
+            return;
+        }
+        
+        // Create new map with a slight delay to ensure container is rendered
+        setTimeout(() => {
+            // Double-check container dimensions
+            if (mapContainer.offsetHeight === 0) {
+                mapContainer.style.height = '500px';
+                mapContainer.style.minHeight = '500px';
+            }
+            
+            window.map = L.map('map', {
+                center: mapData.center,
+                zoom: 13,
+                zoomControl: true,
+                fadeAnimation: false,
+                zoomAnimation: false
+            });
 
-/* Ensure map tiles load */
-.leaflet-tile-container {
-    pointer-events: none;
-}
+            // Add tile layer with error handling
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+                detectRetina: true
+            }).addTo(window.map);
 
-.leaflet-control-attribution {
-    font-size: 9px;
-    background: rgba(255,255,255,0.8);
-    padding: 2px 5px;
-    border-radius: 3px;
+            // Add main site marker
+            L.marker(mapData.center).addTo(window.map)
+                .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
+                .openPopup();
+
+            // Create layers
+            this.createMapLayers(mapData);
+            
+            // Initialize editing tools
+            MapEditor.initEditing();
+            
+            // Force map to recalculate size
+            setTimeout(() => {
+                if (window.map) {
+                    window.map.invalidateSize(true);
+                    console.log('Map size invalidated');
+                }
+            }, 250);
+            
+            console.log('Map initialized successfully');
+            
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please check your internet connection.</div>';
+    }
+},
+```
+
+Also add this event listener to ensure the map loads when the dashboard tab is shown (around line 2050):
+
+```javascript
+// Refresh map when dashboard tab is shown - REPLACE the existing one
+if (target === '#dashboard' && window.map) {
+    setTimeout(() => {
+        window.map.invalidateSize(true);
+    }, 300);
+} else if (target === '#dashboard' && !window.map) {
+    // If map doesn't exist yet, initialize it
+    setTimeout(() => {
+        this.initMap();
+    }, 300);
 }
 ```
 
-With this:
+The key issues were:
 
-```css
-/* Fix map container */
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-}
-
-#map {
-    height: 100%;
-    width: 100%;
-    border-radius: 8px;
-    background: #f8f9fa; /* Fallback background */
-    min-height: 500px; /* Add this line */
-}
-
-/* Ensure map tiles load */
-.leaflet-tile-container {
-    pointer-events: none;
-}
-
-.leaflet-control-attribution {
-    font-size: 9px;
-    background: rgba(255,255,255,0.8);
-    padding: 2px 5px;
-    border-radius: 3px;
-}
-
-/* Add this missing CSS class */
-.image-thumbnail {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 4px;
-    margin: 5px;
-    border: 2px solid #dee2e6;
-}
-```
-
-The main issue is that the min-height: 500px; was missing from the #map element, which can cause Leaflet to calculate a height of 0. The image-thumbnail class was also missing and being used in the JavaScript.
+1. The map was being initialized before the tab was visible
+2. The map container wasn't properly sized when hidden
+3. Added a delay to ensure the DOM is ready
