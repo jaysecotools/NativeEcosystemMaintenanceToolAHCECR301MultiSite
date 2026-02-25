@@ -1,10 +1,17 @@
-Your initMap function looks good! The only thing missing is the addSampleZones function that creates the sample data. You need to add this function to your App object.
+        // Also invalidate on window resize
+        window.addEventListener('resize', function onResize() {
+            if (window.map && document.getElementById('dashboard') && 
+                document.getElementById('dashboard').classList.contains('show')) {
+                window.map.invalidateSize();
+            }
+        });
 
-Find where your App object is defined (around line 3300-3400) and add this function right after initMap:
-
-```javascript
-initMap: function() {
-    // ... your existing initMap code ...
+        console.log('Map initialized successfully');
+        
+    } catch (error) {
+        console.error('Map initialization error:', error);
+        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load. See console for details.</div>';
+    }
 },
 
 // ADD THIS NEW FUNCTION RIGHT HERE:
@@ -55,23 +62,33 @@ addSampleZones: function(mapData) {
 updateMapForCurrentSite: function() {
     this.initMap();
 },
-// ... rest of your functions continue
-```
 
-This function is called from your initMap here:
 
-```javascript
-// Add sample zones if none exist
-if (!mapData.zones || mapData.zones.length === 0) {
-    this.addSampleZones(mapData);  // <-- This calls the function
-}
-```
+                initCalendar: function() {
+                    const calendarEl = document.getElementById('calendar');
+                    if (!calendarEl) return;
 
-Without this function, when there are no zones in mapData.zones, nothing gets created. The addSampleZones function populates mapData.zones, mapData.vegetationMarkers, and mapData.weedMarkers with sample data, which then gets drawn on the map by the code you already have.
+                    try {
+                        if (typeof FullCalendar === 'undefined') {
+                            calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                            return;
+                        }
 
-After adding this function, your map should show:
-
-· Blue polygon for Zone 1
-· Green polygon for Zone 2
-· Green dots for vegetation markers
-· Red dots for weed markers
+                        const events = Utils.filterByCurrentSite(db.activities).map(activity => {
+                            if (!activity) return null;
+                            return {
+                                id: activity.id.toString(),
+                                title: activity.title,
+                                start: activity.startDate,
+                                end: activity.endDate || activity.startDate,
+                                extendedProps: {
+                                    type: activity.type,
+                                    location: activity.location,
+                                    assignedTo: activity.assignedTo,
+                                    status: activity.status
+                                },
+                                backgroundColor: this.getActivityColor(activity.type),
+                                borderColor: this.getActivityColor(activity.type),
+                                textColor: '#fff'
+                            };
+                        }).filter(e => e !== null);
