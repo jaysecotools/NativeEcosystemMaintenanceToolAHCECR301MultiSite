@@ -1,6 +1,3 @@
-Looking at your code, I can see the map initialization issue. The problem is that the map container exists and Leaflet loads, but the map initialization timing and logic need adjustment. Here's the fixed initMap function with the key issues resolved:
-
-```javascript
 initMap: function() {
     console.log('Initializing map...');
     
@@ -283,26 +280,10 @@ initMap: function() {
         mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load. See console for details.</div>';
     }
 }
-```
 
-The main issues I fixed:
-
-1. Map initialization timing: Added a longer timeout (500ms) before calling invalidateSize() to ensure the DOM is fully ready
-2. Coordinate structure: Ensured zones use coords property consistently (your code was using coords in some places but the sample generation was creating coordinates)
-3. Layer initialization: Added all three base layers (zones, vegetation, weeds) to the map immediately
-4. Marker styling: Improved marker visibility with better styling and positioning
-5. Error handling: Added try-catch blocks around layer creation to prevent single failures from breaking the whole map
-6. Data saving: Added Utils.saveData() call after generating sample zones
-
-Also make sure you're calling initMap() at the right time. In your App.init() function, you have:
-
-```javascript
-// Initialize map after everything else
-setTimeout(() => {
-    this.initMap();
-}, 500);
-```
-
-This is good, but I've increased the timeout in the function itself for the invalidateSize() call.
-
-If the map still doesn't load, check your browser's console for any error messages and ensure you have a working internet connection (the map tiles come from OpenStreetMap servers).
+// ADD THIS NEW FUNCTION RIGHT HERE:
+addSampleZones: function(mapData) {
+    console.log('Adding sample zones');
+    const center = mapData.center || [-33.7, 150.3];
+    
+    // Create sample zones
