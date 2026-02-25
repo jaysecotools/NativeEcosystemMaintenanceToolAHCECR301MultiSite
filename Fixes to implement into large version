@@ -18,6 +18,26 @@
                 MAP_FEATURES: 'ecosystem_map_features'
             };
 
+            // ==================== DEPENDENCY CHECK ====================
+            const checkDependencies = () => {
+                const missingDeps = [];
+                
+                if (typeof bootstrap === 'undefined') missingDeps.push('Bootstrap');
+                if (typeof L === 'undefined') missingDeps.push('Leaflet');
+                if (typeof Chart === 'undefined') missingDeps.push('Chart.js');
+                if (typeof FullCalendar === 'undefined') missingDeps.push('FullCalendar');
+                
+                if (missingDeps.length > 0) {
+                    console.error('Missing dependencies:', missingDeps.join(', '));
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger m-3';
+                    alertDiv.innerHTML = `<strong>Error:</strong> Missing required libraries: ${missingDeps.join(', ')}. Please check your internet connection and reload.`;
+                    document.body.prepend(alertDiv);
+                    return false;
+                }
+                return true;
+            };
+
             // ==================== INITIAL DATA ====================
             const db = {
                 assessments: [],
@@ -45,7 +65,8 @@
                     }
                 },
                 currentSiteId: null,
-                editMode: false
+                editMode: false,
+                initialized: false
             };
 
             // ==================== UTILITY FUNCTIONS ====================
@@ -150,7 +171,13 @@
 
                 showToast: function(title, message, type = 'success') {
                     const container = document.getElementById('toastContainer');
-                    if (!container) return;
+                    if (!container) {
+                        // Create toast container if it doesn't exist
+                        const newContainer = document.createElement('div');
+                        newContainer.id = 'toastContainer';
+                        newContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                        document.body.appendChild(newContainer);
+                    }
 
                     const toastId = 'toast-' + Date.now();
                     const bgClass = type === 'success' ? 'bg-success' :
@@ -169,21 +196,28 @@
                         </div>
                     `;
 
-                    container.insertAdjacentHTML('beforeend', toastHtml);
+                    const containerElement = document.getElementById('toastContainer') || newContainer;
+                    containerElement.insertAdjacentHTML('beforeend', toastHtml);
+                    
                     const toastElement = document.getElementById(toastId);
-                    const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
-                    toast.show();
+                    if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+                        toast.show();
 
-                    toastElement.addEventListener('hidden.bs.toast', function() {
-                        this.remove();
-                    });
+                        toastElement.addEventListener('hidden.bs.toast', function() {
+                            this.remove();
+                        });
+                    }
                 },
 
                 showConfirmation: function(title, message, onConfirm) {
                     const modalElement = document.getElementById('modalConfirm');
-                    if (!modalElement) return;
+                    if (!modalElement) {
+                        // Create confirmation modal if it doesn't exist
+                        this.createConfirmationModal();
+                    }
                     
-                    const modal = new bootstrap.Modal(modalElement);
+                    const modal = new bootstrap.Modal(document.getElementById('modalConfirm'));
                     const confirmBody = document.getElementById('confirmModalBody');
                     const confirmLabel = document.getElementById('modalConfirmLabel');
                     
@@ -205,13 +239,36 @@
                     modal.show();
                 },
 
+                createConfirmationModal: function() {
+                    const modalHtml = `
+                        <div class="modal fade" id="modalConfirm" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="modalConfirmLabel">
+                                            <i class="bi bi-exclamation-triangle me-2"></i>Confirm
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body" id="confirmModalBody"></div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                },
+
                 generateId: function() {
                     return Date.now() + Math.floor(Math.random() * 1000);
                 },
 
                 filterByCurrentSite: function(data) {
-                    if (!db.currentSiteId) return [];
-                    return data.filter(item => item.siteId === db.currentSiteId);
+                    if (!db.currentSiteId || !data) return [];
+                    return data.filter(item => item && item.siteId === db.currentSiteId);
                 },
 
                 getCurrentSite: function() {
@@ -276,7 +333,9 @@
                 },
 
                 getSiteHealthData: function(siteId) {
-                    const siteAssessments = db.assessments.filter(a => a.siteId === siteId);
+                    if (!siteId) return this.getDefaultHealthData();
+                    
+                    const siteAssessments = db.assessments.filter(a => a && a.siteId === siteId);
                     
                     let healthData = {
                         biodiversity: 78,
@@ -333,6 +392,23 @@
                     }
                     
                     return healthData;
+                },
+
+                getDefaultHealthData: function() {
+                    return {
+                        biodiversity: 78,
+                        nativeCover: 65,
+                        weedPressure: 22,
+                        erosion: 15,
+                        faunaActivity: 70,
+                        waterQuality: 85,
+                        previousBiodiversity: 72,
+                        previousNativeCover: 60,
+                        previousWeedPressure: 28,
+                        previousErosion: 18,
+                        previousFaunaActivity: 65,
+                        previousWaterQuality: 80
+                    };
                 }
             };
 
@@ -344,42 +420,48 @@
                         return;
                     }
 
-                    // Initialize Leaflet Geoman for drawing/editing
+                    // Check if Leaflet Geoman is available
                     if (window.map.pm) {
-                        window.map.pm.addControls({
-                            position: 'topleft',
-                            drawMarker: true,
-                            drawPolygon: true,
-                            drawPolyline: true,
-                            drawCircle: true,
-                            drawRectangle: true,
-                            editMode: true,
-                            dragMode: true,
-                            cutPolygon: true,
-                            removalMode: true
-                        });
+                        try {
+                            window.map.pm.addControls({
+                                position: 'topleft',
+                                drawMarker: true,
+                                drawPolygon: true,
+                                drawPolyline: true,
+                                drawCircle: true,
+                                drawRectangle: true,
+                                editMode: true,
+                                dragMode: true,
+                                cutPolygon: true,
+                                removalMode: true
+                            });
 
-                        // Set initial options
-                        window.map.pm.setLang('en');
-                        window.map.pm.setGlobalOptions({
-                            snappable: false,
-                            allowSelfIntersection: false
-                        });
+                            // Set initial options
+                            window.map.pm.setLang('en');
+                            window.map.pm.setGlobalOptions({
+                                snappable: false,
+                                allowSelfIntersection: false
+                            });
 
-                        // Listen for created events
-                        window.map.on('pm:create', (e) => {
-                            this.onFeatureCreated(e);
-                        });
+                            // Listen for created events
+                            window.map.on('pm:create', (e) => {
+                                this.onFeatureCreated(e);
+                            });
 
-                        // Listen for edit events
-                        window.map.on('pm:edit', (e) => {
-                            this.onFeatureEdited(e);
-                        });
+                            // Listen for edit events
+                            window.map.on('pm:edit', (e) => {
+                                this.onFeatureEdited(e);
+                            });
 
-                        // Listen for remove events
-                        window.map.on('pm:remove', (e) => {
-                            this.onFeatureRemoved(e);
-                        });
+                            // Listen for remove events
+                            window.map.on('pm:remove', (e) => {
+                                this.onFeatureRemoved(e);
+                            });
+                        } catch (e) {
+                            console.error('Error initializing map editing:', e);
+                        }
+                    } else {
+                        console.warn('Leaflet Geoman not available - map editing disabled');
                     }
 
                     // Load existing features for current site
@@ -406,66 +488,88 @@
 
                     // Add zones
                     siteFeatures.zones.forEach(feature => {
-                        if (feature.type === 'polygon') {
-                            const polygon = L.polygon(feature.coordinates, {
-                                color: feature.color || '#3498db',
-                                weight: 3,
-                                opacity: 0.8,
-                                fillOpacity: 0.2
-                            });
-                            
-                            polygon.featureData = feature;
-                            polygon.bindPopup(this.createFeaturePopup(feature));
-                            window.customZonesLayer.addLayer(polygon);
+                        if (feature && feature.type === 'polygon' && feature.coordinates) {
+                            try {
+                                const polygon = L.polygon(feature.coordinates, {
+                                    color: feature.color || '#3498db',
+                                    weight: 3,
+                                    opacity: 0.8,
+                                    fillOpacity: 0.2
+                                });
+                                
+                                polygon.featureData = feature;
+                                polygon.bindPopup(this.createFeaturePopup(feature));
+                                window.customZonesLayer.addLayer(polygon);
+                            } catch (e) {
+                                console.error('Error creating zone polygon:', e);
+                            }
                         }
                     });
 
                     // Add vegetation markers
                     siteFeatures.vegetation.forEach(feature => {
-                        const marker = L.marker(feature.coordinates, {
-                            icon: L.divIcon({
-                                className: 'custom-div-icon',
-                                html: `<div style="background-color: ${feature.color || '#27ae60'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-                                iconSize: [16, 16],
-                                popupAnchor: [0, -8]
-                            })
-                        });
-                        
-                        marker.featureData = feature;
-                        marker.bindPopup(this.createFeaturePopup(feature));
-                        window.customVegetationLayer.addLayer(marker);
+                        if (feature && feature.coordinates) {
+                            try {
+                                const marker = L.marker(feature.coordinates, {
+                                    icon: L.divIcon({
+                                        className: 'custom-div-icon',
+                                        html: `<div style="background-color: ${feature.color || '#27ae60'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+                                        iconSize: [16, 16],
+                                        popupAnchor: [0, -8]
+                                    })
+                                });
+                                
+                                marker.featureData = feature;
+                                marker.bindPopup(this.createFeaturePopup(feature));
+                                window.customVegetationLayer.addLayer(marker);
+                            } catch (e) {
+                                console.error('Error creating vegetation marker:', e);
+                            }
+                        }
                     });
 
                     // Add weed markers
                     siteFeatures.weeds.forEach(feature => {
-                        const marker = L.marker(feature.coordinates, {
-                            icon: L.divIcon({
-                                className: 'custom-div-icon',
-                                html: `<div style="background-color: ${feature.color || '#e74c3c'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-                                iconSize: [16, 16],
-                                popupAnchor: [0, -8]
-                            })
-                        });
-                        
-                        marker.featureData = feature;
-                        marker.bindPopup(this.createFeaturePopup(feature));
-                        window.customWeedsLayer.addLayer(marker);
+                        if (feature && feature.coordinates) {
+                            try {
+                                const marker = L.marker(feature.coordinates, {
+                                    icon: L.divIcon({
+                                        className: 'custom-div-icon',
+                                        html: `<div style="background-color: ${feature.color || '#e74c3c'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+                                        iconSize: [16, 16],
+                                        popupAnchor: [0, -8]
+                                    })
+                                });
+                                
+                                marker.featureData = feature;
+                                marker.bindPopup(this.createFeaturePopup(feature));
+                                window.customWeedsLayer.addLayer(marker);
+                            } catch (e) {
+                                console.error('Error creating weed marker:', e);
+                            }
+                        }
                     });
 
                     // Add points of interest
                     siteFeatures.points.forEach(feature => {
-                        const marker = L.marker(feature.coordinates, {
-                            icon: L.divIcon({
-                                className: 'custom-div-icon',
-                                html: `<div style="background-color: ${feature.color || '#f1c40f'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-                                iconSize: [16, 16],
-                                popupAnchor: [0, -8]
-                            })
-                        });
-                        
-                        marker.featureData = feature;
-                        marker.bindPopup(this.createFeaturePopup(feature));
-                        window.customPointsLayer.addLayer(marker);
+                        if (feature && feature.coordinates) {
+                            try {
+                                const marker = L.marker(feature.coordinates, {
+                                    icon: L.divIcon({
+                                        className: 'custom-div-icon',
+                                        html: `<div style="background-color: ${feature.color || '#f1c40f'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+                                        iconSize: [16, 16],
+                                        popupAnchor: [0, -8]
+                                    })
+                                });
+                                
+                                marker.featureData = feature;
+                                marker.bindPopup(this.createFeaturePopup(feature));
+                                window.customPointsLayer.addLayer(marker);
+                            } catch (e) {
+                                console.error('Error creating point marker:', e);
+                            }
+                        }
                     });
 
                     // Add layers to map based on toggle states
@@ -489,12 +593,14 @@
                 },
 
                 createFeaturePopup: function(feature) {
-                    const species = feature.speciesId ? db.species.find(s => s.id === feature.speciesId) : null;
+                    if (!feature) return '';
+                    
+                    const species = feature.speciesId ? db.species.find(s => s && s.id === feature.speciesId) : null;
                     
                     return `
                         <div class="feature-popup">
-                            <h6>${Utils.sanitizeHTML(feature.name)}</h6>
-                            <p><strong>Category:</strong> ${Utils.capitalize(feature.category)}</p>
+                            <h6>${Utils.sanitizeHTML(feature.name || 'Unnamed')}</h6>
+                            <p><strong>Category:</strong> ${Utils.capitalize(feature.category || 'unknown')}</p>
                             ${feature.description ? `<p>${Utils.sanitizeHTML(feature.description)}</p>` : ''}
                             ${species ? `<p><strong>Species:</strong> ${Utils.sanitizeHTML(species.scientificName)}</p>` : ''}
                             <button class="btn btn-sm btn-outline-primary edit-feature" data-id="${feature.id}">
@@ -507,7 +613,9 @@
                 onFeatureCreated: function(e) {
                     if (!db.editMode) {
                         // If not in edit mode, remove the created feature
-                        window.map.pm.removeLayer(e.layer);
+                        if (window.map && window.map.pm) {
+                            window.map.pm.removeLayer(e.layer);
+                        }
                         Utils.showToast('Info', 'Enable Edit Mode to add features', 'info');
                         return;
                     }
@@ -527,48 +635,57 @@
 
                     // Get coordinates
                     let coordinates;
-                    if (featureType === 'polygon') {
-                        coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
-                    } else if (featureType === 'line') {
-                        coordinates = layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
-                    } else {
-                        const latlng = layer.getLatLng();
-                        coordinates = [latlng.lat, latlng.lng];
+                    try {
+                        if (featureType === 'polygon') {
+                            coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+                        } else if (featureType === 'line') {
+                            coordinates = layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
+                        } else {
+                            const latlng = layer.getLatLng();
+                            coordinates = [latlng.lat, latlng.lng];
+                        }
+
+                        // Store feature data temporarily
+                        layer.featureData = {
+                            id: Utils.generateId(),
+                            type: featureType,
+                            coordinates: coordinates,
+                            category: 'point-of-interest',
+                            name: 'New Feature',
+                            description: '',
+                            color: '#f1c40f',
+                            speciesId: null,
+                            createdAt: new Date().toISOString()
+                        };
+
+                        // Open modal to edit feature details
+                        this.showAddFeatureModal(layer);
+                    } catch (e) {
+                        console.error('Error creating feature:', e);
+                        Utils.showToast('Error', 'Failed to create feature', 'error');
                     }
-
-                    // Store feature data temporarily
-                    layer.featureData = {
-                        id: Utils.generateId(),
-                        type: featureType,
-                        coordinates: coordinates,
-                        category: 'point-of-interest',
-                        name: 'New Feature',
-                        description: '',
-                        color: '#f1c40f',
-                        speciesId: null,
-                        createdAt: new Date().toISOString()
-                    };
-
-                    // Open modal to edit feature details
-                    this.showAddFeatureModal(layer);
                 },
 
                 onFeatureEdited: function(e) {
                     if (!db.editMode) return;
 
                     const layer = e.layer;
-                    if (layer.featureData) {
-                        // Update coordinates based on new shape
-                        if (layer.featureData.type === 'polygon') {
-                            layer.featureData.coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
-                        } else if (layer.featureData.type === 'line') {
-                            layer.featureData.coordinates = layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
-                        } else {
-                            const latlng = layer.getLatLng();
-                            layer.featureData.coordinates = [latlng.lat, latlng.lng];
+                    if (layer && layer.featureData) {
+                        try {
+                            // Update coordinates based on new shape
+                            if (layer.featureData.type === 'polygon') {
+                                layer.featureData.coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+                            } else if (layer.featureData.type === 'line') {
+                                layer.featureData.coordinates = layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
+                            } else {
+                                const latlng = layer.getLatLng();
+                                layer.featureData.coordinates = [latlng.lat, latlng.lng];
+                            }
+                            
+                            layer.featureData.updatedAt = new Date().toISOString();
+                        } catch (e) {
+                            console.error('Error editing feature:', e);
                         }
-                        
-                        layer.featureData.updatedAt = new Date().toISOString();
                     }
                 },
 
@@ -576,39 +693,51 @@
                     if (!db.editMode) return;
 
                     const layer = e.layer;
-                    if (layer.featureData) {
+                    if (layer && layer.featureData) {
                         this.removeFeatureFromStorage(layer.featureData.id);
                     }
                 },
 
                 showAddFeatureModal: function(layer) {
                     const modal = document.getElementById('modalAddMapFeature');
-                    if (!modal) return;
-
-                    // Clear form
-                    document.getElementById('formAddMapFeature').reset();
-                    
-                    // Set feature type
-                    document.getElementById('featureType').value = layer.featureData.type;
-                    
-                    // Set coordinates
-                    if (layer.featureData.type === 'polygon' || layer.featureData.type === 'line') {
-                        document.getElementById('featureCoordinates').value = JSON.stringify(layer.featureData.coordinates);
-                    } else {
-                        document.getElementById('featureLat').value = layer.featureData.coordinates[0];
-                        document.getElementById('featureLng').value = layer.featureData.coordinates[1];
+                    if (!modal) {
+                        console.error('Add feature modal not found');
+                        return;
                     }
 
-                    // Populate species dropdown
-                    this.populateSpeciesDropdown('featureSpecies');
+                    try {
+                        // Clear form
+                        const form = document.getElementById('formAddMapFeature');
+                        if (form) form.reset();
+                        
+                        // Set feature type
+                        const featureType = document.getElementById('featureType');
+                        if (featureType) featureType.value = layer.featureData.type;
+                        
+                        // Set coordinates
+                        if (layer.featureData.type === 'polygon' || layer.featureData.type === 'line') {
+                            const coordInput = document.getElementById('featureCoordinates');
+                            if (coordInput) coordInput.value = JSON.stringify(layer.featureData.coordinates);
+                        } else {
+                            const latInput = document.getElementById('featureLat');
+                            const lngInput = document.getElementById('featureLng');
+                            if (latInput) latInput.value = layer.featureData.coordinates[0];
+                            if (lngInput) lngInput.value = layer.featureData.coordinates[1];
+                        }
 
-                    // Set up color picker
-                    this.setupColorPicker('colorPickerContainer', 'featureColor');
+                        // Populate species dropdown
+                        this.populateSpeciesDropdown('featureSpecies');
 
-                    // Store layer reference
-                    modal.currentLayer = layer;
+                        // Set up color picker
+                        this.setupColorPicker('colorPickerContainer', 'featureColor');
 
-                    new bootstrap.Modal(modal).show();
+                        // Store layer reference
+                        modal.currentLayer = layer;
+
+                        new bootstrap.Modal(modal).show();
+                    } catch (e) {
+                        console.error('Error showing add feature modal:', e);
+                    }
                 },
 
                 showEditFeatureModal: function(featureId) {
@@ -616,26 +745,40 @@
                     if (!feature) return;
 
                     const modal = document.getElementById('modalEditMapFeature');
-                    if (!modal) return;
+                    if (!modal) {
+                        console.error('Edit feature modal not found');
+                        return;
+                    }
 
-                    // Fill form
-                    document.getElementById('editFeatureId').value = feature.id;
-                    document.getElementById('editFeatureLayerId').value = feature.layerId || '';
-                    document.getElementById('editFeatureName').value = feature.name;
-                    document.getElementById('editFeatureCategory').value = feature.category;
-                    document.getElementById('editFeatureDescription').value = feature.description || '';
-                    document.getElementById('editFeatureColor').value = feature.color || '#3498db';
+                    try {
+                        // Fill form
+                        const idInput = document.getElementById('editFeatureId');
+                        const layerIdInput = document.getElementById('editFeatureLayerId');
+                        const nameInput = document.getElementById('editFeatureName');
+                        const categoryInput = document.getElementById('editFeatureCategory');
+                        const descriptionInput = document.getElementById('editFeatureDescription');
+                        const colorInput = document.getElementById('editFeatureColor');
+                        
+                        if (idInput) idInput.value = feature.id;
+                        if (layerIdInput) layerIdInput.value = feature.layerId || '';
+                        if (nameInput) nameInput.value = feature.name || '';
+                        if (categoryInput) categoryInput.value = feature.category || '';
+                        if (descriptionInput) descriptionInput.value = feature.description || '';
+                        if (colorInput) colorInput.value = feature.color || '#3498db';
 
-                    // Populate species dropdown
-                    this.populateSpeciesDropdown('editFeatureSpecies', feature.speciesId);
+                        // Populate species dropdown
+                        this.populateSpeciesDropdown('editFeatureSpecies', feature.speciesId);
 
-                    // Set up color picker
-                    this.setupColorPicker('editColorPickerContainer', 'editFeatureColor', feature.color);
+                        // Set up color picker
+                        this.setupColorPicker('editColorPickerContainer', 'editFeatureColor', feature.color);
 
-                    // Store feature reference
-                    modal.currentFeature = feature;
+                        // Store feature reference
+                        modal.currentFeature = feature;
 
-                    new bootstrap.Modal(modal).show();
+                        new bootstrap.Modal(modal).show();
+                    } catch (e) {
+                        console.error('Error showing edit feature modal:', e);
+                    }
                 },
 
                 populateSpeciesDropdown: function(selectId, selectedId) {
@@ -645,13 +788,15 @@
                     select.innerHTML = '<option value="">None</option>';
                     
                     Utils.filterByCurrentSite(db.species).forEach(species => {
-                        const option = document.createElement('option');
-                        option.value = species.id;
-                        option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
-                        if (selectedId && species.id === selectedId) {
-                            option.selected = true;
+                        if (species) {
+                            const option = document.createElement('option');
+                            option.value = species.id;
+                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                            if (selectedId && species.id === selectedId) {
+                                option.selected = true;
+                            }
+                            select.appendChild(option);
                         }
-                        select.appendChild(option);
                     });
                 },
 
@@ -681,104 +826,118 @@
 
                 saveNewFeature: function() {
                     const form = document.getElementById('formAddMapFeature');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
                     }
 
-                    const category = document.getElementById('featureCategory').value;
-                    const name = document.getElementById('featureName').value;
-                    const description = document.getElementById('featureDescription').value;
-                    const color = document.getElementById('featureColor').value;
-                    const speciesId = document.getElementById('featureSpecies').value || null;
-                    const featureType = document.getElementById('featureType').value;
+                    try {
+                        const category = document.getElementById('featureCategory').value;
+                        const name = document.getElementById('featureName').value;
+                        const description = document.getElementById('featureDescription').value;
+                        const color = document.getElementById('featureColor').value;
+                        const speciesId = document.getElementById('featureSpecies').value || null;
+                        const featureType = document.getElementById('featureType').value;
 
-                    // Get coordinates
-                    let coordinates;
-                    if (featureType === 'polygon' || featureType === 'line') {
-                        coordinates = JSON.parse(document.getElementById('featureCoordinates').value);
-                    } else {
-                        const lat = parseFloat(document.getElementById('featureLat').value);
-                        const lng = parseFloat(document.getElementById('featureLng').value);
-                        coordinates = [lat, lng];
-                    }
+                        // Get coordinates
+                        let coordinates;
+                        if (featureType === 'polygon' || featureType === 'line') {
+                            coordinates = JSON.parse(document.getElementById('featureCoordinates').value);
+                        } else {
+                            const lat = parseFloat(document.getElementById('featureLat').value);
+                            const lng = parseFloat(document.getElementById('featureLng').value);
+                            coordinates = [lat, lng];
+                        }
 
-                    // Create feature object
-                    const feature = {
-                        id: Utils.generateId(),
-                        siteId: db.currentSiteId,
-                        type: featureType,
-                        category: category,
-                        name: name,
-                        description: description,
-                        color: color,
-                        speciesId: speciesId,
-                        coordinates: coordinates,
-                        createdAt: new Date().toISOString()
-                    };
+                        // Create feature object
+                        const feature = {
+                            id: Utils.generateId(),
+                            siteId: db.currentSiteId,
+                            type: featureType,
+                            category: category,
+                            name: name,
+                            description: description,
+                            color: color,
+                            speciesId: speciesId,
+                            coordinates: coordinates,
+                            createdAt: new Date().toISOString()
+                        };
 
-                    // Store in database
-                    if (!db.mapFeatures[db.currentSiteId]) {
-                        db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
-                    }
+                        // Store in database
+                        if (!db.mapFeatures[db.currentSiteId]) {
+                            db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
+                        }
 
-                    // Add to appropriate category
-                    if (category === 'zone') {
-                        db.mapFeatures[db.currentSiteId].zones.push(feature);
-                    } else if (category === 'vegetation') {
-                        db.mapFeatures[db.currentSiteId].vegetation.push(feature);
-                    } else if (category === 'weed') {
-                        db.mapFeatures[db.currentSiteId].weeds.push(feature);
-                    } else {
-                        db.mapFeatures[db.currentSiteId].points.push(feature);
-                    }
+                        // Add to appropriate category
+                        if (category === 'zone') {
+                            db.mapFeatures[db.currentSiteId].zones.push(feature);
+                        } else if (category === 'vegetation') {
+                            db.mapFeatures[db.currentSiteId].vegetation.push(feature);
+                        } else if (category === 'weed') {
+                            db.mapFeatures[db.currentSiteId].weeds.push(feature);
+                        } else {
+                            db.mapFeatures[db.currentSiteId].points.push(feature);
+                        }
 
-                    // Update the layer with feature data
-                    const modal = document.getElementById('modalAddMapFeature');
-                    if (modal.currentLayer) {
-                        modal.currentLayer.featureData = feature;
-                        
-                        // Update popup
-                        modal.currentLayer.unbindPopup();
-                        modal.currentLayer.bindPopup(this.createFeaturePopup(feature));
-                    }
+                        // Update the layer with feature data
+                        const modal = document.getElementById('modalAddMapFeature');
+                        if (modal && modal.currentLayer) {
+                            modal.currentLayer.featureData = feature;
+                            
+                            // Update popup
+                            modal.currentLayer.unbindPopup();
+                            modal.currentLayer.bindPopup(this.createFeaturePopup(feature));
+                        }
 
-                    // Save to storage
-                    if (Utils.saveData()) {
-                        bootstrap.Modal.getInstance(modal).hide();
-                        Utils.showToast('Success', 'Feature added to map');
-                        this.updateMapFeaturesCount();
+                        // Save to storage
+                        if (Utils.saveData()) {
+                            if (modal) bootstrap.Modal.getInstance(modal).hide();
+                            Utils.showToast('Success', 'Feature added to map');
+                            this.updateMapFeaturesCount();
+                        }
+                    } catch (e) {
+                        console.error('Error saving feature:', e);
+                        Utils.showToast('Error', 'Failed to save feature', 'error');
                     }
                 },
 
                 updateFeature: function() {
                     const form = document.getElementById('formEditMapFeature');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
                     }
 
-                    const featureId = parseInt(document.getElementById('editFeatureId').value);
-                    const feature = this.findFeatureById(featureId);
-                    
-                    if (!feature) return;
+                    try {
+                        const featureId = parseInt(document.getElementById('editFeatureId').value);
+                        const feature = this.findFeatureById(featureId);
+                        
+                        if (!feature) return;
 
-                    // Update properties
-                    feature.name = document.getElementById('editFeatureName').value;
-                    feature.category = document.getElementById('editFeatureCategory').value;
-                    feature.description = document.getElementById('editFeatureDescription').value;
-                    feature.color = document.getElementById('editFeatureColor').value;
-                    feature.speciesId = document.getElementById('editFeatureSpecies').value || null;
-                    feature.updatedAt = new Date().toISOString();
+                        // Update properties
+                        feature.name = document.getElementById('editFeatureName').value;
+                        feature.category = document.getElementById('editFeatureCategory').value;
+                        feature.description = document.getElementById('editFeatureDescription').value;
+                        feature.color = document.getElementById('editFeatureColor').value;
+                        feature.speciesId = document.getElementById('editFeatureSpecies').value || null;
+                        feature.updatedAt = new Date().toISOString();
 
-                    // Find and update the layer
-                    this.updateLayerForFeature(feature);
+                        // Find and update the layer
+                        this.updateLayerForFeature(feature);
 
-                    // Save to storage
-                    if (Utils.saveData()) {
-                        bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
-                        Utils.showToast('Success', 'Feature updated');
-                        this.updateMapFeaturesCount();
+                        // Save to storage
+                        if (Utils.saveData()) {
+                            bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
+                            Utils.showToast('Success', 'Feature updated');
+                            this.updateMapFeaturesCount();
+                        }
+                    } catch (e) {
+                        console.error('Error updating feature:', e);
+                        Utils.showToast('Error', 'Failed to update feature', 'error');
                     }
                 },
 
@@ -789,23 +948,30 @@
                         'Delete Feature',
                         'Are you sure you want to delete this map feature?',
                         () => {
-                            this.removeFeatureFromStorage(featureId);
-                            
-                            // Find and remove the layer
-                            this.removeLayerForFeature(featureId);
-                            
-                            bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
-                            Utils.showToast('Success', 'Feature deleted');
-                            this.updateMapFeaturesCount();
+                            try {
+                                this.removeFeatureFromStorage(featureId);
+                                
+                                // Find and remove the layer
+                                this.removeLayerForFeature(featureId);
+                                
+                                bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
+                                Utils.showToast('Success', 'Feature deleted');
+                                this.updateMapFeaturesCount();
+                            } catch (e) {
+                                console.error('Error deleting feature:', e);
+                                Utils.showToast('Error', 'Failed to delete feature', 'error');
+                            }
                         }
                     );
                 },
 
                 findFeatureById: function(featureId) {
+                    if (!db.currentSiteId) return null;
+                    
                     const siteFeatures = db.mapFeatures[db.currentSiteId] || { zones: [], vegetation: [], weeds: [], points: [] };
                     
                     for (const category of ['zones', 'vegetation', 'weeds', 'points']) {
-                        const feature = siteFeatures[category].find(f => f.id === featureId);
+                        const feature = siteFeatures[category].find(f => f && f.id === featureId);
                         if (feature) return feature;
                     }
                     
@@ -813,11 +979,13 @@
                 },
 
                 removeFeatureFromStorage: function(featureId) {
+                    if (!db.currentSiteId) return;
+                    
                     const siteFeatures = db.mapFeatures[db.currentSiteId];
                     if (!siteFeatures) return;
 
                     for (const category of ['zones', 'vegetation', 'weeds', 'points']) {
-                        const index = siteFeatures[category].findIndex(f => f.id === featureId);
+                        const index = siteFeatures[category].findIndex(f => f && f.id === featureId);
                         if (index !== -1) {
                             siteFeatures[category].splice(index, 1);
                             break;
@@ -836,9 +1004,13 @@
                 },
 
                 updateMapFeaturesCount: function() {
+                    if (!db.currentSiteId) return;
+                    
                     const siteFeatures = db.mapFeatures[db.currentSiteId] || { zones: [], vegetation: [], weeds: [], points: [] };
-                    const total = siteFeatures.zones.length + siteFeatures.vegetation.length + 
-                                 siteFeatures.weeds.length + siteFeatures.points.length;
+                    const total = (siteFeatures.zones ? siteFeatures.zones.length : 0) + 
+                                 (siteFeatures.vegetation ? siteFeatures.vegetation.length : 0) + 
+                                 (siteFeatures.weeds ? siteFeatures.weeds.length : 0) + 
+                                 (siteFeatures.points ? siteFeatures.points.length : 0);
                     
                     const mapFeaturesCount = document.getElementById('mapFeaturesCount');
                     if (mapFeaturesCount) mapFeaturesCount.textContent = total;
@@ -887,14 +1059,16 @@
                         'Clear Map',
                         'Are you sure you want to clear all custom map features? This cannot be undone.',
                         () => {
-                            // Clear features for current site
-                            db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
-                            
-                            // Reload features (which will clear layers)
-                            this.loadFeaturesForCurrentSite();
-                            
-                            Utils.saveData();
-                            Utils.showToast('Success', 'Map cleared');
+                            if (db.currentSiteId) {
+                                // Clear features for current site
+                                db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
+                                
+                                // Reload features (which will clear layers)
+                                this.loadFeaturesForCurrentSite();
+                                
+                                Utils.saveData();
+                                Utils.showToast('Success', 'Map cleared');
+                            }
                         }
                     );
                 }
@@ -922,11 +1096,13 @@
                     
                     // Ensure each site has map data
                     db.sites.forEach(site => {
-                        if (!db.siteMaps[site.id]) {
-                            db.siteMaps[site.id] = Utils.generateSiteLocation(site.id);
-                        }
-                        if (!db.mapFeatures[site.id]) {
-                            db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
+                        if (site) {
+                            if (!db.siteMaps[site.id]) {
+                                db.siteMaps[site.id] = Utils.generateSiteLocation(site.id);
+                            }
+                            if (!db.mapFeatures[site.id]) {
+                                db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
+                            }
                         }
                     });
                     
@@ -948,21 +1124,23 @@
                     }
                     
                     db.sites.forEach(site => {
-                        const option = document.createElement('option');
-                        option.value = site.id;
-                        option.textContent = site.name;
-                        if (site.id === db.currentSiteId) {
-                            option.selected = true;
-                            if (currentSiteName) currentSiteName.textContent = site.name;
-                            
-                            document.querySelectorAll('.site-badge').forEach(badge => {
-                                badge.textContent = site.name;
-                            });
-                            
-                            const dashboardSiteName = document.getElementById('dashboardSiteName');
-                            if (dashboardSiteName) dashboardSiteName.textContent = site.name;
+                        if (site) {
+                            const option = document.createElement('option');
+                            option.value = site.id;
+                            option.textContent = site.name;
+                            if (site.id === db.currentSiteId) {
+                                option.selected = true;
+                                if (currentSiteName) currentSiteName.textContent = site.name;
+                                
+                                document.querySelectorAll('.site-badge').forEach(badge => {
+                                    badge.textContent = site.name;
+                                });
+                                
+                                const dashboardSiteName = document.getElementById('dashboardSiteName');
+                                if (dashboardSiteName) dashboardSiteName.textContent = site.name;
+                            }
+                            selector.appendChild(option);
                         }
-                        selector.appendChild(option);
                     });
                     
                     this.updateSitesTable();
@@ -989,38 +1167,40 @@
                     if (noSitesMsg) noSitesMsg.style.display = 'none';
                     
                     db.sites.forEach(site => {
-                        const row = tbody.insertRow();
-                        
-                        row.innerHTML = `
-                            <td>${Utils.sanitizeHTML(site.name)}</td>
-                            <td>${Utils.sanitizeHTML(site.location)}</td>
-                            <td>${site.area} ha</td>
-                            <td>${Utils.formatDate(site.createdAt)}</td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn btn-sm btn-outline-primary edit-site" data-id="${site.id}">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger delete-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                    ${site.id !== db.currentSiteId ? `
-                                    <button class="btn btn-sm btn-outline-success switch-to-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
-                                        <i class="bi bi-arrow-right-circle"></i>
-                                    </button>
-                                    ` : ''}
-                                    <button class="btn btn-sm btn-outline-info configure-map" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
-                                        <i class="bi bi-geo-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        `;
+                        if (site) {
+                            const row = tbody.insertRow();
+                            
+                            row.innerHTML = `
+                                <td>${Utils.sanitizeHTML(site.name)}</td>
+                                <td>${Utils.sanitizeHTML(site.location)}</td>
+                                <td>${site.area} ha</td>
+                                <td>${Utils.formatDate(site.createdAt)}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-outline-primary edit-site" data-id="${site.id}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger delete-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        ${site.id !== db.currentSiteId ? `
+                                        <button class="btn btn-sm btn-outline-success switch-to-site" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                            <i class="bi bi-arrow-right-circle"></i>
+                                        </button>
+                                        ` : ''}
+                                        <button class="btn btn-sm btn-outline-info configure-map" data-id="${site.id}" data-name="${Utils.sanitizeHTML(site.name)}">
+                                            <i class="bi bi-geo-alt"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            `;
+                        }
                     });
                     
                     document.querySelectorAll('.edit-site').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const site = db.sites.find(s => s.id === id);
+                            const site = db.sites.find(s => s && s.id === id);
                             if (site) this.showEditSiteModal(site);
                         });
                     });
@@ -1087,13 +1267,15 @@
 
                 updateSite: function() {
                     const form = document.getElementById('formEditSite');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
                     }
                     
                     const id = parseInt(document.getElementById('editSiteId').value);
-                    const site = db.sites.find(s => s.id === id);
+                    const site = db.sites.find(s => s && s.id === id);
                     
                     if (site) {
                         site.name = document.getElementById('editSiteName').value;
@@ -1118,6 +1300,8 @@
 
                 saveSite: function() {
                     const form = document.getElementById('formNewSite');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -1161,17 +1345,17 @@
                 },
 
                 deleteSite: function(siteId) {
-                    db.sites = db.sites.filter(s => s.id !== siteId);
+                    db.sites = db.sites.filter(s => s && s.id !== siteId);
                     delete db.siteMaps[siteId];
                     delete db.mapFeatures[siteId];
                     
-                    db.assessments = db.assessments.filter(a => a.siteId !== siteId);
-                    db.species = db.species.filter(s => s.siteId !== siteId);
-                    db.activities = db.activities.filter(a => a.siteId !== siteId);
-                    db.monitoring = db.monitoring.filter(m => m.siteId !== siteId);
-                    db.reports = db.reports.filter(r => r.siteId !== siteId);
-                    db.faunaSightings = db.faunaSightings.filter(f => f.siteId !== siteId);
-                    db.vegetationSurveys = db.vegetationSurveys.filter(v => v.siteId !== siteId);
+                    db.assessments = db.assessments.filter(a => a && a.siteId !== siteId);
+                    db.species = db.species.filter(s => s && s.siteId !== siteId);
+                    db.activities = db.activities.filter(a => a && a.siteId !== siteId);
+                    db.monitoring = db.monitoring.filter(m => m && m.siteId !== siteId);
+                    db.reports = db.reports.filter(r => r && r.siteId !== siteId);
+                    db.faunaSightings = db.faunaSightings.filter(f => f && f.siteId !== siteId);
+                    db.vegetationSurveys = db.vegetationSurveys.filter(v => v && v.siteId !== siteId);
                     
                     if (db.currentSiteId === siteId) {
                         db.currentSiteId = db.sites.length > 0 ? db.sites[0].id : null;
@@ -1226,7 +1410,7 @@
                     
                     bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
                     
-                    const site = db.sites.find(s => s.id === siteId);
+                    const site = db.sites.find(s => s && s.id === siteId);
                     Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
                 }
             };
@@ -1234,11 +1418,17 @@
             // ==================== CORE APP FUNCTIONS ====================
             const App = {
                 init: function() {
+                    // Check dependencies first
+                    if (!checkDependencies()) {
+                        console.warn('Application running with missing dependencies');
+                    }
+                    
                     Utils.loadData();
                     SiteManager.initSites();
                     
                     this.loadInitialData();
                     
+                    // Initialize components with proper timing
                     setTimeout(() => {
                         this.initCharts();
                         this.initCalendar();
@@ -1251,6 +1441,8 @@
                         setTimeout(() => {
                             this.initMap();
                         }, 500);
+                        
+                        db.initialized = true;
                     }, 500);
                 },
 
@@ -1283,7 +1475,11 @@
                     this.populateModalSiteIds();
                     
                     if (window.calendar) {
-                        window.calendar.refetchEvents();
+                        try {
+                            window.calendar.refetchEvents();
+                        } catch (e) {
+                            console.error('Error refreshing calendar:', e);
+                        }
                     }
                     
                     // Force chart update after data loads
@@ -1306,7 +1502,11 @@
                     
                     // Destroy existing chart if it exists
                     if (window.healthChart) {
-                        window.healthChart.destroy();
+                        try {
+                            window.healthChart.destroy();
+                        } catch (e) {
+                            console.error('Error destroying existing chart:', e);
+                        }
                         window.healthChart = null;
                     }
                     
@@ -1315,6 +1515,11 @@
                     
                     // Create new chart
                     try {
+                        if (typeof Chart === 'undefined') {
+                            console.error('Chart.js not loaded');
+                            return;
+                        }
+                        
                         window.healthChart = new Chart(ctx, {
                             type: 'radar',
                             data: {
@@ -1631,9 +1836,9 @@
                     // Initialize health chart
                     this.updateHealthChart();
 
-                    const faunaCtx = document.getElementById('faunaChart');
-                    if (faunaCtx) {
-                        try {
+                    try {
+                        const faunaCtx = document.getElementById('faunaChart');
+                        if (faunaCtx && typeof Chart !== 'undefined') {
                             window.faunaChart = new Chart(faunaCtx, {
                                 type: 'line',
                                 data: {
@@ -1671,14 +1876,14 @@
                                     }
                                 }
                             });
-                        } catch (e) {
-                            console.error('Error creating fauna chart:', e);
                         }
+                    } catch (e) {
+                        console.error('Error creating fauna chart:', e);
                     }
 
-                    const vegetationCtx = document.getElementById('vegetationChart');
-                    if (vegetationCtx) {
-                        try {
+                    try {
+                        const vegetationCtx = document.getElementById('vegetationChart');
+                        if (vegetationCtx && typeof Chart !== 'undefined') {
                             window.vegetationChart = new Chart(vegetationCtx, {
                                 type: 'bar',
                                 data: {
@@ -1708,9 +1913,9 @@
                                     }
                                 }
                             });
-                        } catch (e) {
-                            console.error('Error creating vegetation chart:', e);
                         }
+                    } catch (e) {
+                        console.error('Error creating vegetation chart:', e);
                     }
                 },
 
@@ -1749,12 +1954,21 @@
                         mapContainer.style.height = '500px';
                         mapContainer.style.width = '100%';
                         
+                        // Clear any existing content
+                        mapContainer.innerHTML = '';
+                        
+                        // Check if Leaflet is available
+                        if (typeof L === 'undefined') {
+                            mapContainer.innerHTML = '<div class="alert alert-warning">Leaflet library not loaded.</div>';
+                            return;
+                        }
+                        
                         // Create new map
                         window.map = L.map('map', {
                             center: mapData.center,
                             zoom: 13,
                             zoomControl: true,
-                            fadeAnimation: false, // Disable animations for reliability
+                            fadeAnimation: false,
                             zoomAnimation: false
                         });
 
@@ -1800,6 +2014,8 @@
                 },
 
                 createMapLayers: function(mapData) {
+                    if (!mapData) return;
+                    
                     // Clear existing layers
                     if (window.zonesLayer) window.zonesLayer.clearLayers();
                     if (window.vegetationLayer) window.vegetationLayer.clearLayers();
@@ -1810,37 +2026,61 @@
                     window.weedsLayer = L.layerGroup();
                     
                     // Add zones
-                    mapData.zones.forEach(zone => {
-                        const polygon = L.polygon(zone.coords, {
-                            color: zone.color,
-                            weight: 2,
-                            opacity: 0.8,
-                            fillOpacity: 0.2
-                        }).bindPopup(`<b>${zone.name}</b>`);
-                        window.zonesLayer.addLayer(polygon);
-                    });
+                    if (mapData.zones) {
+                        mapData.zones.forEach(zone => {
+                            if (zone && zone.coords) {
+                                try {
+                                    const polygon = L.polygon(zone.coords, {
+                                        color: zone.color,
+                                        weight: 2,
+                                        opacity: 0.8,
+                                        fillOpacity: 0.2
+                                    }).bindPopup(`<b>${zone.name}</b>`);
+                                    window.zonesLayer.addLayer(polygon);
+                                } catch (e) {
+                                    console.error('Error creating zone polygon:', e);
+                                }
+                            }
+                        });
+                    }
                     
                     // Add vegetation markers
-                    mapData.vegetationMarkers.forEach(markerData => {
-                        const marker = L.circleMarker(markerData.coords, {
-                            radius: 8,
-                            color: '#27ae60',
-                            fillColor: '#27ae60',
-                            fillOpacity: 0.8
-                        }).bindPopup(`<b>Vegetation:</b> ${markerData.name}`);
-                        window.vegetationLayer.addLayer(marker);
-                    });
+                    if (mapData.vegetationMarkers) {
+                        mapData.vegetationMarkers.forEach(markerData => {
+                            if (markerData && markerData.coords) {
+                                try {
+                                    const marker = L.circleMarker(markerData.coords, {
+                                        radius: 8,
+                                        color: '#27ae60',
+                                        fillColor: '#27ae60',
+                                        fillOpacity: 0.8
+                                    }).bindPopup(`<b>Vegetation:</b> ${markerData.name}`);
+                                    window.vegetationLayer.addLayer(marker);
+                                } catch (e) {
+                                    console.error('Error creating vegetation marker:', e);
+                                }
+                            }
+                        });
+                    }
                     
                     // Add weed markers
-                    mapData.weedMarkers.forEach(markerData => {
-                        const marker = L.circleMarker(markerData.coords, {
-                            radius: 8,
-                            color: '#e74c3c',
-                            fillColor: '#e74c3c',
-                            fillOpacity: 0.8
-                        }).bindPopup(`<b>Weed:</b> ${markerData.name}`);
-                        window.weedsLayer.addLayer(marker);
-                    });
+                    if (mapData.weedMarkers) {
+                        mapData.weedMarkers.forEach(markerData => {
+                            if (markerData && markerData.coords) {
+                                try {
+                                    const marker = L.circleMarker(markerData.coords, {
+                                        radius: 8,
+                                        color: '#e74c3c',
+                                        fillColor: '#e74c3c',
+                                        fillOpacity: 0.8
+                                    }).bindPopup(`<b>Weed:</b> ${markerData.name}`);
+                                    window.weedsLayer.addLayer(marker);
+                                } catch (e) {
+                                    console.error('Error creating weed marker:', e);
+                                }
+                            }
+                        });
+                    }
 
                     // Add zones layer by default
                     window.zonesLayer.addTo(window.map);
@@ -1878,21 +2118,24 @@
                             return;
                         }
 
-                        const events = Utils.filterByCurrentSite(db.activities).map(activity => ({
-                            id: activity.id.toString(),
-                            title: activity.title,
-                            start: activity.startDate,
-                            end: activity.endDate || activity.startDate,
-                            extendedProps: {
-                                type: activity.type,
-                                location: activity.location,
-                                assignedTo: activity.assignedTo,
-                                status: activity.status
-                            },
-                            backgroundColor: this.getActivityColor(activity.type),
-                            borderColor: this.getActivityColor(activity.type),
-                            textColor: '#fff'
-                        }));
+                        const events = Utils.filterByCurrentSite(db.activities).map(activity => {
+                            if (!activity) return null;
+                            return {
+                                id: activity.id.toString(),
+                                title: activity.title,
+                                start: activity.startDate,
+                                end: activity.endDate || activity.startDate,
+                                extendedProps: {
+                                    type: activity.type,
+                                    location: activity.location,
+                                    assignedTo: activity.assignedTo,
+                                    status: activity.status
+                                },
+                                backgroundColor: this.getActivityColor(activity.type),
+                                borderColor: this.getActivityColor(activity.type),
+                                textColor: '#fff'
+                            };
+                        }).filter(e => e !== null);
 
                         window.calendar = new FullCalendar.Calendar(calendarEl, {
                             initialView: 'dayGridMonth',
@@ -1903,7 +2146,7 @@
                             },
                             events: events,
                             eventClick: function(info) {
-                                const activity = db.activities.find(a => a.id.toString() === info.event.id);
+                                const activity = db.activities.find(a => a && a.id.toString() === info.event.id);
                                 if (activity) {
                                     App.showActivityDetails(activity);
                                 }
@@ -1938,7 +2181,7 @@
                     const filteredActivities = Utils.filterByCurrentSite(db.activities);
                     const filteredMonitoring = Utils.filterByCurrentSite(db.monitoring);
 
-                    const upcomingTasks = filteredActivities.filter(a => a.status !== 'completed' && a.status !== 'cancelled');
+                    const upcomingTasks = filteredActivities.filter(a => a && a.status !== 'completed' && a.status !== 'cancelled');
                     
                     const totalTasks = document.getElementById('totalTasks');
                     const totalAssessments = document.getElementById('totalAssessments');
@@ -1948,7 +2191,7 @@
                     if (totalAssessments) totalAssessments.textContent = filteredAssessments.length;
                     if (totalSpecies) totalSpecies.textContent = filteredSpecies.length;
 
-                    const completedItems = db.complianceChecklist.filter(item => item.compliant === 'Yes').length;
+                    const completedItems = db.complianceChecklist.filter(item => item && item.compliant === 'Yes').length;
                     const totalItems = db.complianceChecklist.length;
                     const progress = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
                     
@@ -1971,6 +2214,7 @@
                                 .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
                                 .slice(0, 5)
                                 .forEach(task => {
+                                    if (!task) return;
                                     const item = document.createElement('a');
                                     item.href = '#';
                                     item.className = 'list-group-item list-group-item-action';
@@ -1980,7 +2224,7 @@
                                             <h6 class="mb-1">${Utils.sanitizeHTML(task.title)}</h6>
                                             <small class="text-muted">${Utils.formatDate(task.startDate)}</small>
                                         </div>
-                                        <p class="mb-1">${Utils.sanitizeHTML(task.description.substring(0, 50))}${task.description.length > 50 ? '...' : ''}</p>
+                                        <p class="mb-1">${Utils.sanitizeHTML(task.description ? task.description.substring(0, 50) : '')}${task.description && task.description.length > 50 ? '...' : ''}</p>
                                         <small class="text-muted">Assigned to: ${Utils.sanitizeHTML(task.assignedTo)}</small>
                                     `;
                                     item.addEventListener('click', (e) => {
@@ -1997,6 +2241,7 @@
                         observationsList.innerHTML = '';
 
                         const recent = filteredMonitoring
+                            .filter(m => m && m.date)
                             .sort((a, b) => new Date(b.date) - new Date(a.date))
                             .slice(0, 4);
 
@@ -2009,6 +2254,7 @@
                             `;
                         } else {
                             recent.forEach(obs => {
+                                if (!obs) return;
                                 const item = document.createElement('li');
                                 item.className = 'list-group-item d-flex justify-content-between align-items-center';
                                 item.setAttribute('role', 'listitem');
@@ -2036,6 +2282,7 @@
                         }
 
                         db.complianceChecklist.forEach(item => {
+                            if (!item) return;
                             const checkDiv = document.createElement('div');
                             checkDiv.className = 'form-check mb-2';
                             checkDiv.innerHTML = `
@@ -2057,6 +2304,8 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const filteredAssessments = Utils.filterByCurrentSite(db.assessments);
@@ -2077,6 +2326,7 @@
                         `;
                     } else {
                         filteredAssessments.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(assessment => {
+                            if (!assessment) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Date">${Utils.formatDate(assessment.date)}</td>
@@ -2101,7 +2351,7 @@
                     document.querySelectorAll('.view-assessment').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const assessment = db.assessments.find(a => a.id === id);
+                            const assessment = db.assessments.find(a => a && a.id === id);
                             if (assessment) this.showAssessmentDetails(assessment);
                         });
                     });
@@ -2120,7 +2370,7 @@
 
                 showAssessmentDetails: function(assessment) {
                     const modalBody = document.getElementById('assessmentModalBody');
-                    if (!modalBody) return;
+                    if (!modalBody || !assessment) return;
 
                     modalBody.innerHTML = `
                         <div class="row mb-3">
@@ -2168,6 +2418,8 @@
 
                 saveAssessment: function() {
                     const form = document.getElementById('formNewAssessment');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         
@@ -2231,6 +2483,7 @@
                         cardsContainer.innerHTML = '';
 
                         const recentSpecies = filteredSpecies
+                            .filter(s => s && s.lastObserved)
                             .sort((a, b) => new Date(b.lastObserved || 0) - new Date(a.lastObserved || 0))
                             .slice(0, 3);
 
@@ -2248,6 +2501,7 @@
                             `;
                         } else {
                             recentSpecies.forEach(species => {
+                                if (!species) return;
                                 const col = document.createElement('div');
                                 col.className = 'col-md-4 mb-4';
                                 col.innerHTML = `
@@ -2277,6 +2531,8 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     this.updateSpeciesDropdowns();
@@ -2294,6 +2550,7 @@
                         `;
                     } else {
                         filteredSpecies.forEach(species => {
+                            if (!species) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Scientific Name">${Utils.sanitizeHTML(species.scientificName)}</td>
@@ -2317,7 +2574,7 @@
                     document.querySelectorAll('.view-species, .view-species-card').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const species = db.species.find(s => s.id === id);
+                            const species = db.species.find(s => s && s.id === id);
                             if (species) this.showSpeciesDetails(species);
                         });
                     });
@@ -2343,32 +2600,38 @@
                     if (monitoringSelect) {
                         monitoringSelect.innerHTML = '';
                         filteredSpecies.forEach(species => {
-                            const option = document.createElement('option');
-                            option.value = species.id;
-                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
-                            monitoringSelect.appendChild(option);
+                            if (species) {
+                                const option = document.createElement('option');
+                                option.value = species.id;
+                                option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                                monitoringSelect.appendChild(option);
+                            }
                         });
                     }
 
                     const faunaSelect = document.getElementById('faunaSpecies');
                     if (faunaSelect) {
                         faunaSelect.innerHTML = '<option value="" selected disabled>Select species...</option>';
-                        filteredSpecies.filter(s => s.type === 'fauna').forEach(species => {
-                            const option = document.createElement('option');
-                            option.value = species.id;
-                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
-                            faunaSelect.appendChild(option);
+                        filteredSpecies.filter(s => s && s.type === 'fauna').forEach(species => {
+                            if (species) {
+                                const option = document.createElement('option');
+                                option.value = species.id;
+                                option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                                faunaSelect.appendChild(option);
+                            }
                         });
                     }
 
                     const vegSelect = document.getElementById('vegetationSpecies');
                     if (vegSelect) {
                         vegSelect.innerHTML = '';
-                        filteredSpecies.filter(s => s.type === 'flora').forEach(species => {
-                            const option = document.createElement('option');
-                            option.value = species.id;
-                            option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
-                            vegSelect.appendChild(option);
+                        filteredSpecies.filter(s => s && s.type === 'flora').forEach(species => {
+                            if (species) {
+                                const option = document.createElement('option');
+                                option.value = species.id;
+                                option.textContent = `${species.scientificName}${species.commonName ? ` (${species.commonName})` : ''}`;
+                                vegSelect.appendChild(option);
+                            }
                         });
                     }
 
@@ -2379,6 +2642,8 @@
 
                 saveSpecies: function() {
                     const form = document.getElementById('formNewSpecies');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -2386,7 +2651,7 @@
 
                     let image = '';
                     const fileInput = document.getElementById('speciesImage');
-                    if (fileInput && fileInput.files.length > 0) {
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
                         image = URL.createObjectURL(fileInput.files[0]);
                     }
 
@@ -2423,7 +2688,7 @@
 
                 showSpeciesDetails: function(species) {
                     const modalBody = document.getElementById('speciesModalBody');
-                    if (!modalBody) return;
+                    if (!modalBody || !species) return;
 
                     modalBody.innerHTML = `
                         <div class="row mb-3">
@@ -2502,11 +2767,13 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const filteredActivities = Utils.filterByCurrentSite(db.activities);
                     const upcoming = filteredActivities
-                        .filter(a => a.status === 'planned' || a.status === 'in-progress')
+                        .filter(a => a && (a.status === 'planned' || a.status === 'in-progress'))
                         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
 
                     if (upcoming.length === 0) {
@@ -2525,6 +2792,7 @@
                         `;
                     } else {
                         upcoming.forEach(activity => {
+                            if (!activity) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
@@ -2554,11 +2822,13 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const filteredActivities = Utils.filterByCurrentSite(db.activities);
                     const completed = filteredActivities
-                        .filter(a => a.status === 'completed')
+                        .filter(a => a && a.status === 'completed')
                         .sort((a, b) => new Date(b.endDate || b.startDate) - new Date(a.endDate || a.startDate));
 
                     if (completed.length === 0) {
@@ -2574,6 +2844,7 @@
                         `;
                     } else {
                         completed.forEach(activity => {
+                            if (!activity) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
@@ -2603,6 +2874,8 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const today = new Date();
@@ -2610,7 +2883,7 @@
 
                     const filteredActivities = Utils.filterByCurrentSite(db.activities);
                     const overdue = filteredActivities
-                        .filter(a => (a.status === 'planned' || a.status === 'in-progress') && new Date(a.startDate) < today)
+                        .filter(a => a && (a.status === 'planned' || a.status === 'in-progress') && new Date(a.startDate) < today)
                         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
 
                     if (overdue.length === 0) {
@@ -2626,6 +2899,7 @@
                         `;
                     } else {
                         overdue.forEach(activity => {
+                            if (!activity) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Activity">${Utils.sanitizeHTML(activity.title)}</td>
@@ -2652,7 +2926,7 @@
                     document.querySelectorAll('.view-activity').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const activity = db.activities.find(a => a.id === id);
+                            const activity = db.activities.find(a => a && a.id === id);
                             if (activity) this.showActivityDetails(activity);
                         });
                     });
@@ -2682,6 +2956,8 @@
 
                 saveActivity: function() {
                     const form = document.getElementById('formNewActivity');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -2714,7 +2990,11 @@
                         
                         this.loadActivities();
                         if (window.calendar) {
-                            window.calendar.refetchEvents();
+                            try {
+                                window.calendar.refetchEvents();
+                            } catch (e) {
+                                console.error('Error refreshing calendar:', e);
+                            }
                         }
                         this.loadDashboard();
                     }
@@ -2722,7 +3002,7 @@
 
                 showActivityDetails: function(activity) {
                     const modalBody = document.getElementById('activityModalBody');
-                    if (!modalBody) return;
+                    if (!modalBody || !activity) return;
 
                     modalBody.innerHTML = `
                         <div class="row mb-3">
@@ -2803,7 +3083,7 @@
                 },
 
                 completeActivity: function(activityId) {
-                    const activity = db.activities.find(a => a.id === activityId);
+                    const activity = db.activities.find(a => a && a.id === activityId);
                     if (activity) {
                         activity.status = 'completed';
                         activity.endDate = new Date().toISOString();
@@ -2814,7 +3094,11 @@
                             
                             this.loadActivities();
                             if (window.calendar) {
-                                window.calendar.refetchEvents();
+                                try {
+                                    window.calendar.refetchEvents();
+                                } catch (e) {
+                                    console.error('Error refreshing calendar:', e);
+                                }
                             }
                             this.loadDashboard();
                         }
@@ -2826,6 +3110,8 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const filteredMonitoring = Utils.filterByCurrentSite(db.monitoring);
@@ -2846,13 +3132,14 @@
                         `;
                     } else {
                         filteredMonitoring.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(monitoring => {
+                            if (!monitoring) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Date">${Utils.formatDate(monitoring.date)}</td>
                                 <td data-label="Type">${this.formatMonitoringType(monitoring.type)}</td>
                                 <td data-label="Location">${Utils.sanitizeHTML(monitoring.location)}</td>
                                 <td data-label="Observer">${Utils.sanitizeHTML(monitoring.observer)}</td>
-                                <td data-label="Findings">${Utils.sanitizeHTML(monitoring.findings.substring(0, 50))}${monitoring.findings.length > 50 ? '...' : ''}</td>
+                                <td data-label="Findings">${Utils.sanitizeHTML(monitoring.findings ? monitoring.findings.substring(0, 50) : '')}${monitoring.findings && monitoring.findings.length > 50 ? '...' : ''}</td>
                                 <td data-label="Actions">
                                     <div class="action-buttons">
                                         <button class="btn btn-sm btn-outline-primary view-monitoring" data-id="${monitoring.id}">
@@ -2867,7 +3154,7 @@
                     document.querySelectorAll('.view-monitoring').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const monitoring = db.monitoring.find(m => m.id === id);
+                            const monitoring = db.monitoring.find(m => m && m.id === id);
                             if (monitoring) this.showMonitoringDetails(monitoring);
                         });
                     });
@@ -2886,6 +3173,8 @@
 
                 saveMonitoring: function() {
                     const form = document.getElementById('formNewMonitoring');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -2926,10 +3215,10 @@
 
                 showMonitoringDetails: function(monitoring) {
                     const modalBody = document.getElementById('monitoringModalBody');
-                    if (!modalBody) return;
+                    if (!modalBody || !monitoring) return;
 
                     const speciesNames = monitoring.species ? monitoring.species.map(id => {
-                        const s = db.species.find(sp => sp.id === id);
+                        const s = db.species.find(sp => sp && sp.id === id);
                         return s ? `${s.scientificName}${s.commonName ? ` (${s.commonName})` : ''}` : 'Unknown species';
                     }) : [];
 
@@ -2991,6 +3280,8 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     const filteredReports = Utils.filterByCurrentSite(db.reports);
@@ -3011,6 +3302,7 @@
                         `;
                     } else {
                         filteredReports.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(report => {
+                            if (!report) return;
                             const row = tbody.insertRow();
                             row.innerHTML = `
                                 <td data-label="Date">${Utils.formatDate(report.date)}</td>
@@ -3034,7 +3326,7 @@
                     document.querySelectorAll('.view-report').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const report = db.reports.find(r => r.id === id);
+                            const report = db.reports.find(r => r && r.id === id);
                             if (report) this.showReportDetails(report);
                         });
                     });
@@ -3042,7 +3334,7 @@
                     document.querySelectorAll('.download-report').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const id = parseInt(btn.dataset.id);
-                            const report = db.reports.find(r => r.id === id);
+                            const report = db.reports.find(r => r && r.id === id);
                             if (report) this.downloadReport(report);
                         });
                     });
@@ -3087,7 +3379,7 @@
                             body: `Report generated for ${currentSite?.name || 'site'}`,
                             data: filteredData,
                             progress: type === 'compliance' ? 
-                                Math.round((db.complianceChecklist.filter(item => item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
+                                Math.round((db.complianceChecklist.filter(item => item && item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
                             checklist: type === 'compliance' ? db.complianceChecklist : []
                         },
                         format: 'pdf',
@@ -3130,20 +3422,11 @@
                         const end = new Date(endDate);
                         
                         if (type === 'maintenance') {
-                            data = Utils.filterByCurrentSite(db.activities).filter(a => {
-                                const date = new Date(a.startDate);
-                                return date >= start && date <= end;
-                            });
+                            data = Utils.filterByCurrentSite(db.activities).filter(a => a && a.startDate && new Date(a.startDate) >= start && new Date(a.startDate) <= end);
                         } else if (type === 'monitoring') {
-                            data = Utils.filterByCurrentSite(db.monitoring).filter(m => {
-                                const date = new Date(m.date);
-                                return date >= start && date <= end;
-                            });
+                            data = Utils.filterByCurrentSite(db.monitoring).filter(m => m && m.date && new Date(m.date) >= start && new Date(m.date) <= end);
                         } else if (type === 'health-trend') {
-                            data = Utils.filterByCurrentSite(db.assessments).filter(a => {
-                                const date = new Date(a.date);
-                                return date >= start && date <= end;
-                            });
+                            data = Utils.filterByCurrentSite(db.assessments).filter(a => a && a.date && new Date(a.date) >= start && new Date(a.date) <= end);
                         }
                     } else {
                         data = type === 'maintenance' ? Utils.filterByCurrentSite(db.activities) :
@@ -3164,7 +3447,7 @@
                             body: `Report generated for ${currentSite?.name || 'site'}`,
                             data: data,
                             progress: type === 'compliance' ? 
-                                Math.round((db.complianceChecklist.filter(item => item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
+                                Math.round((db.complianceChecklist.filter(item => item && item.compliant === 'Yes').length / db.complianceChecklist.length) * 100) : null,
                             checklist: type === 'compliance' ? db.complianceChecklist : []
                         },
                         format: format,
@@ -3191,6 +3474,11 @@
 
                 generatePDFReport: function(report) {
                     try {
+                        if (typeof window.jspdf === 'undefined') {
+                            Utils.showToast('Error', 'PDF library not loaded', 'error');
+                            return;
+                        }
+                        
                         const { jsPDF } = window.jspdf;
                         const doc = new jsPDF();
                         
@@ -3270,13 +3558,15 @@
                                 ['Requirement', 'Status', 'Evidence', 'Notes']
                             ];
                             
-                            report.content.checklist.forEach(item => {
-                                data.push([
-                                    item.requirement,
-                                    item.compliant || 'Not assessed',
-                                    item.evidence || 'None',
-                                    item.notes || ''
-                                ]);
+                            (report.content.checklist || []).forEach(item => {
+                                if (item) {
+                                    data.push([
+                                        item.requirement,
+                                        item.compliant || 'Not assessed',
+                                        item.evidence || 'None',
+                                        item.notes || ''
+                                    ]);
+                                }
                             });
                             
                             const ws = XLSX.utils.aoa_to_sheet(data);
@@ -3292,15 +3582,17 @@
                             ];
                             
                             (report.content.data || []).forEach(activity => {
-                                data.push([
-                                    activity.title,
-                                    this.formatActivityType(activity.type),
-                                    Utils.formatDateTime(activity.startDate),
-                                    Utils.capitalize(activity.status),
-                                    activity.assignedTo,
-                                    activity.location,
-                                    Utils.capitalize(activity.priority)
-                                ]);
+                                if (activity) {
+                                    data.push([
+                                        activity.title,
+                                        this.formatActivityType(activity.type),
+                                        Utils.formatDateTime(activity.startDate),
+                                        Utils.capitalize(activity.status),
+                                        activity.assignedTo,
+                                        activity.location,
+                                        Utils.capitalize(activity.priority)
+                                    ]);
+                                }
                             });
                             
                             const ws = XLSX.utils.aoa_to_sheet(data);
@@ -3400,7 +3692,7 @@
 
                 showReportDetails: function(report) {
                     const modalBody = document.getElementById('reportModalBody');
-                    if (!modalBody) return;
+                    if (!modalBody || !report) return;
 
                     let html = `
                         <div class="row mb-3">
@@ -3506,9 +3798,12 @@
                     if (!table) return;
 
                     const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    
                     tbody.innerHTML = '';
 
                     db.complianceChecklist.forEach(item => {
+                        if (!item) return;
                         const row = tbody.insertRow();
                         row.innerHTML = `
                             <td>${Utils.sanitizeHTML(item.requirement)}</td>
@@ -3538,7 +3833,7 @@
                             const id = parseInt(btn.dataset.id);
                             const note = prompt('Enter note:');
                             if (note !== null) {
-                                const item = db.complianceChecklist.find(i => i.id === id);
+                                const item = db.complianceChecklist.find(i => i && i.id === id);
                                 if (item) {
                                     item.notes = note;
                                     Utils.saveData();
@@ -3552,13 +3847,13 @@
                 saveComplianceChecklist: function() {
                     document.querySelectorAll('.compliance-status').forEach(select => {
                         const id = parseInt(select.dataset.id);
-                        const item = db.complianceChecklist.find(i => i.id === id);
+                        const item = db.complianceChecklist.find(i => i && i.id === id);
                         if (item) item.compliant = select.value;
                     });
 
                     document.querySelectorAll('.compliance-evidence').forEach(input => {
                         const id = parseInt(input.dataset.id);
-                        const item = db.complianceChecklist.find(i => i.id === id);
+                        const item = db.complianceChecklist.find(i => i && i.id === id);
                         if (item) item.evidence = input.value;
                     });
 
@@ -3582,6 +3877,8 @@
                     e.preventDefault();
                     const form = document.getElementById('settingsUserProfileForm');
                     
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -3602,6 +3899,8 @@
                 changePassword: function(e) {
                     e.preventDefault();
                     const form = document.getElementById('settingsPasswordForm');
+                    
+                    if (!form) return;
                     
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
@@ -3699,7 +3998,11 @@
                             this.loadAllData();
                             
                             if (window.calendar) {
-                                window.calendar.refetchEvents();
+                                try {
+                                    window.calendar.refetchEvents();
+                                } catch (e) {
+                                    console.error('Error refreshing calendar:', e);
+                                }
                             }
                             
                             if (window.map) {
@@ -3714,6 +4017,8 @@
 
                 saveFaunaSighting: function() {
                     const form = document.getElementById('formFaunaSighting');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -3735,7 +4040,7 @@
 
                     db.faunaSightings.push(newSighting);
 
-                    const species = db.species.find(s => s.id === newSighting.speciesId);
+                    const species = db.species.find(s => s && s.id === newSighting.speciesId);
                     if (species) {
                         species.lastObserved = newSighting.date;
                     }
@@ -3755,6 +4060,8 @@
 
                 saveVegetationSurvey: function() {
                     const form = document.getElementById('formVegetationSurvey');
+                    if (!form) return;
+                    
                     if (!form.checkValidity()) {
                         form.classList.add('was-validated');
                         return;
@@ -3782,7 +4089,7 @@
                     db.vegetationSurveys.push(newSurvey);
 
                     species.forEach(id => {
-                        const s = db.species.find(sp => sp.id === id);
+                        const s = db.species.find(sp => sp && sp.id === id);
                         if (s) s.lastObserved = newSurvey.date;
                     });
 
@@ -3805,7 +4112,7 @@
                         siteSelector.addEventListener('change', (e) => {
                             const siteId = parseInt(e.target.value);
                             if (siteId && siteId !== db.currentSiteId) {
-                                const site = db.sites.find(s => s.id === siteId);
+                                const site = db.sites.find(s => s && s.id === siteId);
                                 if (site) {
                                     SiteManager.promptSwitchSite(siteId, site.name);
                                 }
@@ -3973,7 +4280,7 @@
                                 this.loadAssessments();
                             } else if (target === '#maintenance-plan') {
                                 this.loadActivities();
-                                if (window.calendar) window.calendar.refetchEvents();
+                                if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
                             } else if (target === '#species-register') {
                                 this.loadSpecies();
                             } else if (target === '#monitoring') {
@@ -4078,23 +4385,25 @@
                             input.addEventListener('change', function() {
                                 container.innerHTML = '';
                                 
-                                Array.from(this.files).forEach(file => {
-                                    if (file.type.startsWith('image/')) {
-                                        const url = URL.createObjectURL(file);
-                                        const img = document.createElement('img');
-                                        img.src = url;
-                                        img.className = 'image-thumbnail';
-                                        img.alt = 'Preview';
-                                        container.appendChild(img);
-                                        
-                                        const modal = this.closest('.modal');
-                                        if (modal) {
-                                            modal.addEventListener('hidden.bs.modal', function() {
-                                                URL.revokeObjectURL(url);
-                                            }, { once: true });
+                                if (this.files) {
+                                    Array.from(this.files).forEach(file => {
+                                        if (file.type.startsWith('image/')) {
+                                            const url = URL.createObjectURL(file);
+                                            const img = document.createElement('img');
+                                            img.src = url;
+                                            img.className = 'image-thumbnail';
+                                            img.alt = 'Preview';
+                                            container.appendChild(img);
+                                            
+                                            const modal = this.closest('.modal');
+                                            if (modal) {
+                                                modal.addEventListener('hidden.bs.modal', function() {
+                                                    URL.revokeObjectURL(url);
+                                                }, { once: true });
+                                            }
                                         }
-                                    }
-                                });
+                                    });
+                                }
                             });
                         }
                     });
