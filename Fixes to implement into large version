@@ -1,0 +1,404 @@
+Looking at your code, I can see several issues causing the map to be grey and the health chart not updating when switching projects. Let me provide you with the fixes:
+
+1. Fix for Grey Map
+
+The map initialization has timing and dimension issues. Replace your initMap function with this improved version:
+
+```javascript
+initMap: function() {
+    console.log('Initializing map...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found');
+        return;
+    }
+
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
+    
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+        return;
+    }
+    
+    let mapData = db.siteMaps[siteId];
+    if (!mapData) {
+        mapData = Utils.generateSiteLocation(siteId);
+        db.siteMaps[siteId] = mapData;
+        Utils.saveData();
+    }
+    
+    try {
+        // Clean up existing map
+        if (window.map) {
+            window.map.remove();
+            window.map = null;
+        }
+        
+        // Ensure container has proper dimensions
+        mapContainer.style.height = '500px';
+        mapContainer.style.width = '100%';
+        
+        // Create new map
+        window.map = L.map('map', {
+            center: mapData.center,
+            zoom: 13,
+            zoomControl: true,
+            fadeAnimation: false, // Disable animations for reliability
+            zoomAnimation: false
+        });
+
+        // Add tile layer with error handling
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19,
+            detectRetina: true
+        }).addTo(window.map);
+
+        // Add main site marker
+        L.marker(mapData.center).addTo(window.map)
+            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
+            .openPopup();
+
+        // Create layers
+        this.createMapLayers(mapData);
+        
+        // Initialize editing tools
+        this.initMapEditing();
+        
+        // Force map to recalculate size
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+                console.log('Map size invalidated');
+            }
+        }, 250);
+        
+        // Additional resize on window resize
+        window.addEventListener('resize', () => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+            }
+        });
+        
+        console.log('Map initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please check your internet connection.</div>';
+    }
+},
+
+createMapLayers: function(mapData) {
+    // Clear existing layers
+    if (window.zonesLayer) window.zonesLayer.clearLayers();
+    if (window.vegetationLayer) window.vegetationLayer.clearLayers();
+    if (window.weedsLayer) window.weedsLayer.clearLayers();
+    
+    window.zonesLayer = L.layerGroup();
+    window.vegetationLayer = L.layerGroup();
+    window.weedsLayer = L.layerGroup();
+    
+    // Add zones
+    mapData.zones.forEach(zone => {
+        const polygon = L.polygon(zone.coords, {
+            color: zone.color,
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.2
+        }).bindPopup(`<b>${zone.name}</b>`);
+        window.zonesLayer.addLayer(polygon);
+    });
+    
+    // Add vegetation markers
+    mapData.vegetationMarkers.forEach(markerData => {
+        const marker = L.circleMarker(markerData.coords, {
+            radius: 8,
+            color: '#27ae60',
+            fillColor: '#27ae60',
+            fillOpacity: 0.8
+        }).bindPopup(`<b>Vegetation:</b> ${markerData.name}`);
+        window.vegetationLayer.addLayer(marker);
+    });
+    
+    // Add weed markers
+    mapData.weedMarkers.forEach(markerData => {
+        const marker = L.circleMarker(markerData.coords, {
+            radius: 8,
+            color: '#e74c3c',
+            fillColor: '#e74c3c',
+            fillOpacity: 0.8
+        }).bindPopup(`<b>Weed:</b> ${markerData.name}`);
+        window.weedsLayer.addLayer(marker);
+    });
+
+    // Add zones layer by default
+    window.zonesLayer.addTo(window.map);
+    
+    // Set button states
+    const zoneToggle = document.getElementById('zoneToggle');
+    const vegToggle = document.getElementById('vegetationToggle');
+    const weedsToggle = document.getElementById('weedsToggle');
+    
+    if (zoneToggle) {
+        zoneToggle.classList.add('active');
+        zoneToggle.setAttribute('aria-pressed', 'true');
+    }
+    if (vegToggle) {
+        vegToggle.classList.remove('active');
+        vegToggle.setAttribute('aria-pressed', 'false');
+    }
+    if (weedsToggle) {
+        weedsToggle.classList.remove('active');
+        weedsToggle.setAttribute('aria-pressed', 'false');
+    }
+},
+
+initMapEditing: function() {
+    if (!window.map) return;
+    
+    try {
+        // Initialize Leaflet Draw if available
+        if (window.L && window.L.drawVersion) {
+            const drawControl = new L.Control.Draw({
+                draw: {
+                    polygon: true,
+                    polyline: true,
+                    rectangle: true,
+                    circle: true,
+                    marker: true,
+                    circlemarker: false
+                },
+                edit: {
+                    featureGroup: new L.FeatureGroup()
+                }
+            });
+            window.map.addControl(drawControl);
+        }
+    } catch (e) {
+        console.warn('Drawing tools not available:', e);
+    }
+}
+```
+
+2. Fix for Health Chart Not Updating
+
+The issue is that the chart isn't being properly destroyed and recreated when switching sites. Replace your updateHealthChart function:
+
+```javascript
+updateHealthChart: function() {
+    const canvas = document.getElementById('healthChart');
+    if (!canvas) return;
+    
+    const healthData = Utils.getSiteHealthData(db.currentSiteId);
+    const siteName = Utils.getCurrentSite()?.name || 'this site';
+    
+    // Destroy existing chart if it exists
+    if (window.healthChart) {
+        window.healthChart.destroy();
+        window.healthChart = null;
+    }
+    
+    // Get canvas context
+    const ctx = canvas.getContext('2d');
+    
+    // Create new chart
+    try {
+        window.healthChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Biodiversity', 'Native Cover', 'Weed Pressure', 'Erosion', 'Fauna Activity', 'Water Quality'],
+                datasets: [{
+                    label: 'Current',
+                    data: [
+                        healthData.biodiversity,
+                        healthData.nativeCover,
+                        healthData.weedPressure,
+                        healthData.erosion,
+                        healthData.faunaActivity,
+                        healthData.waterQuality
+                    ],
+                    backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(40, 167, 69, 1)'
+                }, {
+                    label: 'Previous',
+                    data: [
+                        healthData.previousBiodiversity,
+                        healthData.previousNativeCover,
+                        healthData.previousWeedPressure,
+                        healthData.previousErosion,
+                        healthData.previousFaunaActivity,
+                        healthData.previousWaterQuality
+                    ],
+                    backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                    borderColor: 'rgba(108, 117, 125, 0.8)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(108, 117, 125, 0.8)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (value) => value + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                return `${context.dataset.label}: ${context.raw}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        console.log('Health chart updated for site:', siteName);
+        
+    } catch (error) {
+        console.error('Error updating health chart:', error);
+    }
+    
+    const indicatorsDiv = document.getElementById('healthIndicators');
+    if (indicatorsDiv) {
+        const assessmentCount = Utils.filterByCurrentSite(db.assessments).length;
+        indicatorsDiv.innerHTML = `
+            <div class="alert alert-info small">
+                <i class="bi bi-info-circle me-2"></i>
+                Health data based on ${assessmentCount} assessment(s) for ${siteName}.
+            </div>
+        `;
+    }
+}
+```
+
+3. Fix for Site Switching to Ensure Chart Updates
+
+Update the switchSite function in SiteManager:
+
+```javascript
+switchSite: function(siteId) {
+    // Save current site data
+    Utils.saveData();
+    
+    // Update current site
+    db.currentSiteId = siteId;
+    
+    // Update UI
+    this.loadSiteSelector();
+    App.populateModalSiteIds();
+    
+    // Force chart update first
+    setTimeout(() => {
+        App.updateHealthChart();
+    }, 100);
+    
+    // Then load all data
+    setTimeout(() => {
+        App.loadAllData();
+    }, 200);
+    
+    // Update map
+    setTimeout(() => {
+        if (window.map) {
+            App.initMap(); // Reinitialize map completely
+        } else {
+            App.initMap();
+        }
+    }, 300);
+    
+    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
+    
+    const site = db.sites.find(s => s.id === siteId);
+    Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
+}
+```
+
+4. Update the loadAllData function
+
+Make sure the chart updates properly when all data loads:
+
+```javascript
+loadAllData: function() {
+    this.loadDashboard();
+    this.loadAssessments();
+    this.loadSpecies();
+    this.loadActivities();
+    this.loadMonitoring();
+    this.loadReports();
+    this.loadComplianceChecklist();
+    this.loadSettings();
+    this.populateModalSiteIds();
+    
+    if (window.calendar) {
+        window.calendar.refetchEvents();
+    }
+    
+    // Force chart update after data loads
+    setTimeout(() => {
+        this.updateHealthChart();
+    }, 150);
+    
+    if (window.map) {
+        // Reinitialize map for new site
+        this.initMap();
+    }
+}
+```
+
+5. CSS Fix for Map Container
+
+Add this to your CSS to ensure proper map display:
+
+```css
+/* Fix map container */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa; /* Fallback background */
+}
+
+/* Ensure map tiles load */
+.leaflet-tile-container {
+    pointer-events: none;
+}
+
+.leaflet-control-attribution {
+    font-size: 9px;
+    background: rgba(255,255,255,0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+```
+
+These fixes should resolve:
+
+1. Grey map: Proper initialization with dimensions, error handling, and tile layer loading
+2. Chart not updating: Complete destruction and recreation of chart on site switch
+3. Site switching: Proper sequence of updates for both map and chart
+
+The key issues were timing (map initializing before DOM was ready), improper chart destruction, and missing resize calls. These fixes ensure everything updates correctly when switching between sites.
