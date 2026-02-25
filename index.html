@@ -1,3 +1,7 @@
+<!-- This current version requires full JavaScript replacement. This version does not work. -->
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -220,6 +224,7 @@
     width: 100%;
     border-radius: 8px;
     background: #f8f9fa; /* Fallback background */
+    min-height: 500px; /* Add this line */
 }
 
 /* Ensure map tiles load */
@@ -232,6 +237,16 @@
     background: rgba(255,255,255,0.8);
     padding: 2px 5px;
     border-radius: 3px;
+}
+
+/* Add this missing CSS class */
+.image-thumbnail {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin: 5px;
+    border: 2px solid #dee2e6;
 }
         
         .map-controls {
