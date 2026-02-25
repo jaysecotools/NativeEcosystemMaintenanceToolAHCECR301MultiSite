@@ -1,0 +1,80 @@
+Looking at your code, I can see the issue with the map. The problem is in the map initialization timing and a missing CSS class. Here's the fix:
+
+Replace this section in your CSS (around line 136):
+
+```css
+/* Fix map container */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa; /* Fallback background */
+}
+
+/* Ensure map tiles load */
+.leaflet-tile-container {
+    pointer-events: none;
+}
+
+.leaflet-control-attribution {
+    font-size: 9px;
+    background: rgba(255,255,255,0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+```
+
+With this:
+
+```css
+/* Fix map container */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa; /* Fallback background */
+    min-height: 500px; /* Add this line */
+}
+
+/* Ensure map tiles load */
+.leaflet-tile-container {
+    pointer-events: none;
+}
+
+.leaflet-control-attribution {
+    font-size: 9px;
+    background: rgba(255,255,255,0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+/* Add this missing CSS class */
+.image-thumbnail {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin: 5px;
+    border: 2px solid #dee2e6;
+}
+```
+
+The main issue is that the min-height: 500px; was missing from the #map element, which can cause Leaflet to calculate a height of 0. The image-thumbnail class was also missing and being used in the JavaScript.
