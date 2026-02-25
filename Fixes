@@ -1,114 +1,285 @@
-Looking at your code, I can see the issue - the map tab event handler was placed inside the loadDashboard() function instead of in the setupEventListeners() function. Let me provide you with the corrected version. Here's the fix:
+The issue is that the site initialization is happening before the DOM is fully ready, and there's a missing method in the App object. Let me provide you with a comprehensive fix for all the issues:
 
-Find this section in your code (around line 3630 in the JavaScript section):
+Find and replace your entire initMap function with this corrected version:
 
 ```javascript
-// Force map refresh when dashboard tab is shown
-const dashboardTab = document.getElementById('dashboard-tab');
-if (dashboardTab) {
-    dashboardTab.addEventListener('shown.bs.tab', function() {
-        if (window.map) {
-            setTimeout(() => {
-                window.map.invalidateSize(true);
-                console.log('Map refreshed on tab show');
-            }, 300);
-        } else {
-            // If map doesn't exist, initialize it
-            App.initMap();
+initMap: function() {
+    console.log('Initializing map...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found');
+        return;
+    }
+
+    // Check if Leaflet is loaded
+    if (typeof L === 'undefined') {
+        console.error('Leaflet not loaded');
+        mapContainer.innerHTML = '<div class="alert alert-danger">Leaflet library failed to load. Check internet connection.</div>';
+        return;
+    }
+
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
+    
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+        return;
+    }
+    
+    // Clean up existing map
+    if (window.map) {
+        try {
+            window.map.remove();
+        } catch (e) {
+            console.warn('Error removing existing map:', e);
         }
-    });
-}
-```
+        window.map = null;
+    }
+    
+    // Clear container
+    mapContainer.innerHTML = '';
+    
+    // Get map data
+    let mapData = db.siteMaps[siteId];
+    if (!mapData) {
+        mapData = {
+            center: [-33.7, 150.3], // Blue Mountains default
+            zones: [],
+            vegetationMarkers: [],
+            weedMarkers: []
+        };
+        db.siteMaps[siteId] = mapData;
+    }
+    
+    try {
+        // Create new map instance
+        window.map = L.map('map', {
+            center: mapData.center || [-33.7, 150.3],
+            zoom: 12,
+            zoomControl: true
+        });
 
-Delete that entire block from where it is (it's currently inside loadDashboard()).
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19
+        }).addTo(window.map);
 
-Then, in the setupEventListeners() function (around line 4840), add this code INSIDE the existing function, right after the other tab event listeners:
+        // Add site marker
+        L.marker(mapData.center || [-33.7, 150.3])
+            .addTo(window.map)
+            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b>`)
+            .openPopup();
 
-Look for this section in setupEventListeners():
+        // Create layer groups
+        window.zonesLayer = L.layerGroup();
+        window.vegetationLayer = L.layerGroup();
+        window.weedsLayer = L.layerGroup();
 
-```javascript
-document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-    tab.addEventListener('shown.bs.tab', (e) => {
-        const target = e.target.getAttribute('data-bs-target');
+        // Add sample zones if none exist
+        if (!mapData.zones || mapData.zones.length === 0) {
+            this.addSampleZones(mapData);
+        }
+
+        // Add zones to map
+        if (mapData.zones && mapData.zones.length > 0) {
+            mapData.zones.forEach(zone => {
+                if (zone && zone.coords) {
+                    const polygon = L.polygon(zone.coords, {
+                        color: zone.color || '#3498db',
+                        weight: 2,
+                        opacity: 0.8,
+                        fillOpacity: 0.2
+                    }).bindPopup(`<b>${Utils.sanitizeHTML(zone.name)}</b>`);
+                    window.zonesLayer.addLayer(polygon);
+                }
+            });
+        }
+
+        // Add vegetation markers
+        if (mapData.vegetationMarkers && mapData.vegetationMarkers.length > 0) {
+            mapData.vegetationMarkers.forEach(marker => {
+                if (marker && marker.coords) {
+                    const m = L.marker(marker.coords, {
+                        icon: L.divIcon({
+                            className: 'veg-marker',
+                            html: '<div style="background-color: #27ae60; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>',
+                            iconSize: [16, 16]
+                        })
+                    }).bindPopup(`<b>${Utils.sanitizeHTML(marker.name)}</b>`);
+                    window.vegetationLayer.addLayer(m);
+                }
+            });
+        }
+
+        // Add weed markers
+        if (mapData.weedMarkers && mapData.weedMarkers.length > 0) {
+            mapData.weedMarkers.forEach(marker => {
+                if (marker && marker.coords) {
+                    const m = L.marker(marker.coords, {
+                        icon: L.divIcon({
+                            className: 'weed-marker',
+                            html: '<div style="background-color: #e74c3c; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>',
+                            iconSize: [16, 16]
+                        })
+                    }).bindPopup(`<b>${Utils.sanitizeHTML(marker.name)}</b>`);
+                    window.weedsLayer.addLayer(m);
+                }
+            });
+        }
+
+        // Add layers to map
+        window.zonesLayer.addTo(window.map);
         
-        if (target === '#dashboard') {
-            this.loadDashboard();
-        } else if (target === '#site-assessment') {
-            this.loadAssessments();
-        } else if (target === '#maintenance-plan') {
-            this.loadActivities();
-            if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
-        } else if (target === '#species-register') {
-            this.loadSpecies();
-        } else if (target === '#monitoring') {
-            this.loadMonitoring();
-        } else if (target === '#reports') {
-            this.loadReports();
-        } else if (target === '#legislation') {
-            this.loadComplianceChecklist();
-        } else if (target === '#settings') {
-            this.loadSettings();
+        // Initialize custom layers for editable features
+        window.customZonesLayer = L.layerGroup();
+        window.customVegetationLayer = L.layerGroup();
+        window.customWeedsLayer = L.layerGroup();
+        window.customPointsLayer = L.layerGroup();
+        
+        // Load custom features
+        MapEditor.loadFeaturesForCurrentSite();
+        
+        // Initialize editing tools if available
+        if (window.map.pm) {
+            try {
+                window.map.pm.addControls({
+                    position: 'topleft',
+                    drawMarker: true,
+                    drawPolygon: true,
+                    drawPolyline: true,
+                    drawCircle: true,
+                    drawRectangle: true,
+                    editMode: true,
+                    dragMode: true,
+                    cutPolygon: true,
+                    removalMode: true
+                });
+                
+                // Set initial edit mode state
+                if (db.editMode) {
+                    window.map.pm.enableDraw('Marker');
+                } else {
+                    window.map.pm.disableDraw();
+                }
+            } catch (e) {
+                console.warn('Geoman controls failed:', e);
+            }
         }
 
-        // Refresh map when dashboard tab is shown
-        if (target === '#dashboard' && window.map) {
-            setTimeout(() => {
-                window.map.invalidateSize(true);
-            }, 300);
+        // Set button states
+        const zoneToggle = document.getElementById('zoneToggle');
+        const vegToggle = document.getElementById('vegetationToggle');
+        const weedsToggle = document.getElementById('weedsToggle');
+        const editModeBtn = document.getElementById('editModeBtn');
+        const mapEditMode = document.getElementById('mapEditMode');
+        
+        if (zoneToggle) {
+            zoneToggle.classList.add('active');
+            zoneToggle.setAttribute('aria-pressed', 'true');
         }
-    });
-});
+        if (vegToggle) {
+            vegToggle.classList.remove('active');
+            vegToggle.setAttribute('aria-pressed', 'false');
+        }
+        if (weedsToggle) {
+            weedsToggle.classList.remove('active');
+            weedsToggle.setAttribute('aria-pressed', 'false');
+        }
+        if (editModeBtn && mapEditMode) {
+            if (db.editMode) {
+                editModeBtn.classList.add('active', 'btn-warning');
+                editModeBtn.classList.remove('btn-outline-warning');
+                editModeBtn.innerHTML = '<i class="bi bi-pencil-square"></i> Exit Edit Mode';
+                mapEditMode.textContent = 'Edit Mode';
+            } else {
+                editModeBtn.classList.remove('active', 'btn-warning');
+                editModeBtn.classList.add('btn-outline-warning');
+                editModeBtn.innerHTML = '<i class="bi bi-pencil-square"></i> Edit Mode';
+                mapEditMode.textContent = 'View Mode';
+            }
+        }
+
+        // CRITICAL: Force map to recalculate size
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+                console.log('Map size invalidated');
+            }
+        }, 300);
+
+        // Also invalidate on window resize
+        window.addEventListener('resize', function onResize() {
+            if (window.map && document.getElementById('dashboard') && 
+                document.getElementById('dashboard').classList.contains('show')) {
+                window.map.invalidateSize();
+            }
+        });
+
+        console.log('Map initialized successfully');
+        
+    } catch (error) {
+        console.error('Map initialization error:', error);
+        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load. See console for details.</div>';
+    }
+},
 ```
 
-Replace that entire block with this corrected version:
+Also, make sure the addSampleZones method is properly defined. Find and replace it with:
 
 ```javascript
-document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-    tab.addEventListener('shown.bs.tab', (e) => {
-        const target = e.target.getAttribute('data-bs-target');
-        
-        if (target === '#dashboard') {
-            this.loadDashboard();
-        } else if (target === '#site-assessment') {
-            this.loadAssessments();
-        } else if (target === '#maintenance-plan') {
-            this.loadActivities();
-            if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
-        } else if (target === '#species-register') {
-            this.loadSpecies();
-        } else if (target === '#monitoring') {
-            this.loadMonitoring();
-        } else if (target === '#reports') {
-            this.loadReports();
-        } else if (target === '#legislation') {
-            this.loadComplianceChecklist();
-        } else if (target === '#settings') {
-            this.loadSettings();
+addSampleZones: function(mapData) {
+    // Add default zones for Blue Mountains
+    const center = mapData.center || [-33.7, 150.3];
+    
+    mapData.zones = [
+        {
+            name: 'Zone 1 - Native Forest',
+            coords: [
+                [center[0] - 0.02, center[1] - 0.02],
+                [center[0] - 0.02, center[1] + 0.02],
+                [center[0] + 0.02, center[1] + 0.02],
+                [center[0] + 0.02, center[1] - 0.02]
+            ],
+            color: '#3498db'
+        },
+        {
+            name: 'Zone 2 - Wetland Area',
+            coords: [
+                [center[0] + 0.03, center[1] - 0.03],
+                [center[0] + 0.03, center[1] + 0.01],
+                [center[0] + 0.07, center[1] + 0.01],
+                [center[0] + 0.07, center[1] - 0.03]
+            ],
+            color: '#27ae60'
         }
-    });
-});
-
-// Force map refresh when dashboard tab is shown - SEPARATE HANDLER
-const dashboardTab = document.getElementById('dashboard-tab');
-if (dashboardTab) {
-    dashboardTab.addEventListener('shown.bs.tab', function() {
-        if (window.map) {
-            setTimeout(() => {
-                window.map.invalidateSize(true);
-                console.log('Map refreshed on tab show');
-            }, 300);
-        } else {
-            // If map doesn't exist, initialize it
-            App.initMap();
-        }
-    });
-}
+    ];
+    
+    mapData.vegetationMarkers = [
+        { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [center[0] - 0.01, center[1] + 0.01] },
+        { name: 'Acacia melanoxylon (Blackwood)', coords: [center[0] + 0.01, center[1] - 0.01] }
+    ];
+    
+    mapData.weedMarkers = [
+        { name: 'Rubus fruticosus (Blackberry)', coords: [center[0] + 0.02, center[1] + 0.02] }
+    ];
+},
 ```
 
-The key changes are:
+And finally, add this missing method to the App object. Find the createMapLayers method (around line 3400) and replace it with:
 
-1. The map tab handler is now properly placed in setupEventListeners() instead of inside loadDashboard()
-2. It's separate from the other tab handlers to ensure it runs properly
-3. It checks if the map exists and either refreshes it or initializes it
+```javascript
+createMapLayers: function(mapData) {
+    // This method is now handled in initMap
+    console.log('Creating map layers');
+},
+```
 
-This should fix your map issue. The map will now properly refresh when you switch to the dashboard tab, and it will initialize properly when first loaded.
+The main issues were:
+
+1. The createMapLayers method was referenced but not properly defined
+2. The layer groups (zonesLayer, vegetationLayer, weedsLayer) weren't being created before use
+3. The sample zones weren't being properly added to the map
+
+These fixes should get your map working again with all the sample data visible.
