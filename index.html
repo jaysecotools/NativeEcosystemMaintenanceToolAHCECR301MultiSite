@@ -1,4 +1,39 @@
-<!-- This current version requires full JavaScript replacement. This version does not work. -->
+<!-- 
+    Native Ecosystem Maintenance Tool | AHCECR301 Compliance
+    Features: Multi-site management, interactive maps with editing, species register, 
+    maintenance calendar, monitoring surveys, PDF/Excel reports
+    Data stored in browser localStorage - works offline
+    Dependencies: Bootstrap 5, Leaflet, FullCalendar, Chart.js, jsPDF
+    
+    ==================== NEXT STEPS & KNOWN ISSUES ====================
+    
+    TO COMPLETE / FIX:
+    [ ] Create UserGuide.html - link in sidebar currently opens blank tab
+    [ ] Test Leaflet Geoman drawing tools across different browsers (Chrome works best)
+    [ ] Add data import functionality (export exists, import doesn't)
+    [ ] Implement user authentication if moving to multi-user setup
+    
+    ENHANCEMENTS TO CONSIDER:
+    [ ] Add cloud backup/sync option (currently localStorage only)
+    [ ] Add offline support via Service Workers for field work
+    [ ] Add GPS integration for mobile devices
+    [ ] Add email notifications for upcoming maintenance tasks
+    [ ] Add QR code scanning for species/plot identification
+    [ ] Implement data export to CSV in addition to JSON
+    
+    KNOWN MINOR ISSUES:
+    [!] Map may need manual resize when switching sites - refresh or tab switch fixes
+    [!] Photo preview URLs are temporary - images don't persist after page reload
+    [!] FullCalendar event refresh can be slow with many activities
+    [!] Print styles need refinement for report layouts
+    
+    TESTING STATUS:
+    [✓] Desktop: Chrome, Firefox, Edge
+    [?] Mobile responsiveness - needs testing on tablets/phones
+    [?] Safari - Leaflet and FullCalendar compatibility unverified
+    
+    ================================================================
+-->
 
 
 
