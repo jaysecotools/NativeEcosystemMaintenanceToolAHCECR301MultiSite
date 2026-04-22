@@ -1,89 +1,153 @@
-You need to place this code inside the setupEventListeners function in your existing JavaScript. Here's exactly where:
+That's very helpful - the map worked before, so the JavaScript is still correct, but something in the changes broke it. Since you can't use F12, let me give you the most likely fix.
 
-Location in your code
+Most Likely Problem: The Async Functions
 
-Look for the setupEventListeners function in your script. It should be around line 3980-4000 (near the end of the script). Inside that function, you'll see many if statements adding event listeners.
+The saveAssessment and saveSpecies functions became async (which is correct), but this sometimes affects how other code loads. The map initialization might be trying to run before everything is ready.
 
-Find this section:
+Quick Fix - Add a Map Retry
+
+Find the initMap function in your App object (around line 2500-2600). Add a retry mechanism. Replace your existing initMap with this:
 
 ```javascript
-setupEventListeners: function() {
-    const siteSelector = document.getElementById('siteSelector');
-    if (siteSelector) {
-        siteSelector.addEventListener('change', (e) => {
-            // ... existing code ...
-        });
+initMap: function(retryCount = 0) {
+    console.log('Initializing map...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found');
+        return;
     }
 
-    // ... many other event listeners ...
+    // Check if Leaflet is available
+    if (typeof L === 'undefined') {
+        if (retryCount < 5) {
+            console.log('Leaflet not ready, retrying in 500ms...');
+            setTimeout(() => this.initMap(retryCount + 1), 500);
+            return;
+        } else {
+            mapContainer.innerHTML = '<div class="alert alert-warning">Map library failed to load. Please refresh the page.</div>';
+            return;
+        }
+    }
 
-    // Look for this section near the end of the function:
-    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-        tab.addEventListener('shown.bs.tab', (e) => {
-            // ... EXISTING CODE HERE ...
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
+    
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+        return;
+    }
+    
+    let mapData = db.siteMaps[siteId];
+    if (!mapData) {
+        mapData = Utils.generateSiteLocation(siteId);
+        db.siteMaps[siteId] = mapData;
+        Utils.saveData();
+    }
+    
+    try {
+        // Clean up existing map
+        if (window.map) {
+            window.map.remove();
+            window.map = null;
+        }
+        
+        // Ensure container has proper dimensions
+        mapContainer.style.height = '500px';
+        mapContainer.style.width = '100%';
+        
+        // Clear any existing content
+        mapContainer.innerHTML = '';
+        
+        // Create new map
+        window.map = L.map('map', {
+            center: mapData.center,
+            zoom: 13,
+            zoomControl: true,
+            fadeAnimation: false,
+            zoomAnimation: false
         });
-    });
-}
+
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19,
+            detectRetina: true
+        }).addTo(window.map);
+
+        // Add main site marker
+        L.marker(mapData.center).addTo(window.map)
+            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
+            .openPopup();
+
+        // Create layers
+        this.createMapLayers(mapData);
+        
+        // Initialize editing tools
+        if (typeof MapEditor !== 'undefined' && MapEditor.initEditing) {
+            MapEditor.initEditing();
+        }
+        
+        // Force map to recalculate size
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+                console.log('Map size invalidated');
+            }
+        }, 250);
+        
+        console.log('Map initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please refresh the page.</div>';
+    }
+},
 ```
 
-Replace the existing document.querySelectorAll('[data-bs-toggle="tab"]') section with the new code.
+Also Check: The loadAllData Function
 
-Complete replacement section:
-
-Find the existing tab event listener code and replace the entire block with:
+Find this function and make sure the map initialization is delayed properly. It should look like this:
 
 ```javascript
-// Tab change event listeners - refresh content when tabs are shown
-document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-    tab.addEventListener('shown.bs.tab', (e) => {
-        const target = e.target.getAttribute('data-bs-target');
-        
-        if (target === '#dashboard') {
-            this.loadDashboard();
-            // Refresh map when dashboard tab is shown
-            setTimeout(() => {
-                if (window.map) {
-                    window.map.invalidateSize(true);
-                } else {
-                    this.initMap();
-                }
-            }, 300);
-        } else if (target === '#site-assessment') {
-            this.loadAssessments();
-        } else if (target === '#maintenance-plan') {
-            this.loadActivities();
-            if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
-        } else if (target === '#species-register') {
-            this.loadSpecies();
-        } else if (target === '#monitoring') {
-            this.loadMonitoring();
-        } else if (target === '#reports') {
-            this.loadReports();
-        } else if (target === '#legislation') {
-            this.loadComplianceChecklist();
-        } else if (target === '#settings') {
-            this.loadSettings();
+loadAllData: function() {
+    this.loadDashboard();
+    this.loadAssessments();
+    this.loadSpecies();
+    this.loadActivities();
+    this.loadMonitoring();
+    this.loadReports();
+    this.loadComplianceChecklist();
+    this.loadSettings();
+    this.populateModalSiteIds();
+    
+    if (window.calendar) {
+        try {
+            window.calendar.refetchEvents();
+        } catch (e) {
+            console.error('Error refreshing calendar:', e);
         }
-    });
-});
-```
-
-Visual guide:
-
-```
-setupEventListeners: function() {
-    // ... all your existing event listeners ...
+    }
     
-    // ↓↓↓ FIND THIS SECTION ↓↓↓
-    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-        tab.addEventListener('shown.bs.tab', (e) => {
-            // This is the code you need to REPLACE
-        });
-    });
-    // ↑↑↑ REPLACE THE ABOVE SECTION ↑↑↑
+    // Force chart update after data loads
+    setTimeout(() => {
+        this.updateHealthChart();
+    }, 150);
     
-    // ... rest of your event listeners ...
-}
+    // Update map after everything else is loaded
+    setTimeout(() => {
+        this.initMap();
+    }, 300);
+},
 ```
 
-This ensures the map refreshes properly whenever you switch to the Dashboard tab, fixing the display issue.
+If That Doesn't Work
+
+Try clearing your browser's cache:
+
+· Chrome/Edge: Ctrl+Shift+Delete → Clear cached images and files
+· Then refresh the page (Ctrl+F5 for hard refresh)
+
+The issue is almost certainly timing-related - the async image functions changed the load order, and the map is trying to initialize before Leaflet is ready. The retry mechanism above should fix it.
+
+Let me know if the map works after making these changes!
