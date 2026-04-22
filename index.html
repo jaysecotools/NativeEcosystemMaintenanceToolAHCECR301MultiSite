@@ -10,7 +10,7 @@
     TO COMPLETE / FIX:
     [✓] Create UserGuide.html - link in sidebar currently opens blank tab
     [ ] Test Leaflet Geoman drawing tools across different browsers (Chrome works best)
-    [ ] Add data import functionality (export exists, import doesn't)
+    [✓] Add data import functionality (export exists, import doesn't)
     [ ] Implement user authentication if moving to multi-user setup
     
     ENHANCEMENTS TO CONSIDER:
@@ -23,7 +23,6 @@
     
     KNOWN MINOR ISSUES:
     [!] Map may need manual resize when switching sites - refresh or tab switch fixes
-    [!] Photo preview URLs are temporary - images don't persist after page reload
     [!] FullCalendar event refresh can be slow with many activities
     [!] Print styles need refinement for report layouts
     
@@ -1704,22 +1703,28 @@
                                             Data Management
                                         </h5>
                                         
-                                        <div class="d-grid gap-2">
-                                            <button class="btn btn-outline-secondary" id="exportAllDataBtn">
-                                                <i class="bi bi-download me-2" aria-hidden="true"></i>
-                                                Export All Data
-                                            </button>
-                                            
-                                            <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
-                                                <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
-                                                Backup Database
-                                            </button>
-                                            
-                                            <button class="btn btn-outline-danger" id="resetTestDataBtn">
-                                                <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
-                                                Reset Test Data
-                                            </button>
-                                        </div>
+<div class="d-grid gap-2">
+    <button class="btn btn-outline-secondary" id="exportAllDataBtn">
+        <i class="bi bi-download me-2" aria-hidden="true"></i>
+        Export All Data
+    </button>
+    
+    <button class="btn btn-outline-primary" id="importDataBtn">
+        <i class="bi bi-upload me-2" aria-hidden="true"></i>
+        Import Data (JSON)
+    </button>
+    
+    <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
+        <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
+        Backup Database
+    </button>
+    
+    <button class="btn btn-outline-danger" id="resetTestDataBtn">
+        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
+        Reset Test Data
+    </button>
+</div>
+
                                     </div>
                                 </div>
 
@@ -3073,347 +3078,508 @@
             };
 
             // ==================== UTILITY FUNCTIONS ====================
-            const Utils = {
-                parseJSON: function(key, defaultValue) {
-                    try {
-                        const item = localStorage.getItem(key);
-                        return item ? JSON.parse(item) : defaultValue;
-                    } catch (e) {
-                        console.error(`Error parsing ${key}:`, e);
-                        return defaultValue;
+const Utils = {
+    parseJSON: function(key, defaultValue) {
+        try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : defaultValue;
+        } catch (e) {
+            console.error(`Error parsing ${key}:`, e);
+            return defaultValue;
+        }
+    },
+
+    saveData: function() {
+        try {
+            localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
+            localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
+            localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
+            localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
+            localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
+            localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
+            localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
+            localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
+            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
+            localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
+            localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
+            localStorage.setItem(STORAGE_KEYS.MAP_FEATURES, JSON.stringify(db.mapFeatures));
+            return true;
+        } catch (e) {
+            console.error('Error saving data:', e);
+            this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
+            return false;
+        }
+    },
+
+    loadData: function() {
+        db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
+        db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
+        db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
+        db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
+        db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
+        db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
+        db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
+        db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
+        db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
+        db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
+        db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
+        db.mapFeatures = this.parseJSON(STORAGE_KEYS.MAP_FEATURES, {});
+        
+        // Initialize mapFeatures for existing sites if needed
+        db.sites.forEach(site => {
+            if (site && !db.mapFeatures[site.id]) {
+                db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
+            }
+        });
+    },
+
+    // ========== NEW IMAGE HANDLING FUNCTIONS ==========
+    
+    compressImage: function(base64String, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
+                
+                // Calculate new dimensions while maintaining aspect ratio
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round(height * (maxWidth / width));
+                        width = maxWidth;
                     }
-                },
-
-                saveData: function() {
-                    try {
-                        localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
-                        localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
-                        localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
-                        localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
-                        localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
-                        localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
-                        localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
-                        localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
-                        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
-                        localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
-                        localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
-                        localStorage.setItem(STORAGE_KEYS.MAP_FEATURES, JSON.stringify(db.mapFeatures));
-                        return true;
-                    } catch (e) {
-                        console.error('Error saving data:', e);
-                        this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
-                        return false;
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round(width * (maxHeight / height));
+                        height = maxHeight;
                     }
-                },
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Compress and convert back to base64
+                const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedBase64);
+            };
+            img.onerror = function() {
+                resolve(base64String); // Return original if compression fails
+            };
+            img.src = base64String;
+        });
+    },
 
-                loadData: function() {
-                    db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
-                    db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
-                    db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
-                    db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
-                    db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
-                    db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
-                    db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
-                    db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
-                    db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
-                    db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
-                    db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
-                    db.mapFeatures = this.parseJSON(STORAGE_KEYS.MAP_FEATURES, {});
-                    
-                    // Initialize mapFeatures for existing sites if needed
-                    db.sites.forEach(site => {
-                        if (!db.mapFeatures[site.id]) {
-                            db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
-                        }
-                    });
-                },
+    convertImageToBase64: function(file, maxSizeKB = 500) {
+        return new Promise((resolve, reject) => {
+            if (!file || !file.type.startsWith('image/')) {
+                resolve(null);
+                return;
+            }
+            
+            // Check file size before processing
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                this.showToast('Warning', `Image ${file.name} exceeds 5MB and was skipped`, 'warning');
+                resolve(null);
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                let base64 = e.target.result;
+                
+                // Compress the image
+                base64 = await Utils.compressImage(base64, 800, 800, 0.7);
+                
+                // Check final size and warn if still large
+                const sizeInKB = Math.round(base64.length * 0.75 / 1024);
+                if (sizeInKB > maxSizeKB) {
+                    Utils.showToast('Info', `Image compressed to ${sizeInKB}KB`, 'info');
+                }
+                
+                resolve(base64);
+            };
+            reader.onerror = function(e) {
+                console.error('Error converting image:', e);
+                reject(null);
+            };
+            reader.readAsDataURL(file);
+        });
+    },
 
-                sanitizeHTML: function(str) {
-                    if (!str) return '';
-                    const div = document.createElement('div');
-                    div.textContent = str;
-                    return div.innerHTML;
-                },
+    convertMultipleImagesToBase64: async function(files, maxPhotos = 5) {
+        const base64Images = [];
+        const limitedFiles = files.slice(0, maxPhotos);
+        
+        if (files.length > maxPhotos) {
+            this.showToast('Warning', `Only ${maxPhotos} photos will be saved. ${files.length - maxPhotos} were skipped.`, 'warning');
+        }
+        
+        for (const file of limitedFiles) {
+            if (file && file.type.startsWith('image/')) {
+                const base64 = await this.convertImageToBase64(file);
+                if (base64) base64Images.push(base64);
+            }
+        }
+        return base64Images;
+    },
 
-                formatDate: function(dateString) {
-                    if (!dateString) return 'Not specified';
-                    try {
-                        const date = new Date(dateString);
-                        if (isNaN(date.getTime())) return 'Invalid date';
-                        return date.toLocaleDateString('en-AU', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                        });
-                    } catch (e) {
-                        return dateString;
-                    }
-                },
+    // ========== NEW IMPORT FUNCTION ==========
+    
+    importData: function(jsonData) {
+        try {
+            const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            
+            // Validate structure
+            if (!data || typeof data !== 'object') {
+                throw new Error('Invalid data format');
+            }
+            
+            let importCount = 0;
+            
+            // Import each data type if present
+            if (data.assessments && Array.isArray(data.assessments)) {
+                db.assessments = data.assessments;
+                importCount += data.assessments.length;
+            }
+            if (data.species && Array.isArray(data.species)) {
+                db.species = data.species;
+                importCount += data.species.length;
+            }
+            if (data.activities && Array.isArray(data.activities)) {
+                db.activities = data.activities;
+                importCount += data.activities.length;
+            }
+            if (data.monitoring && Array.isArray(data.monitoring)) {
+                db.monitoring = data.monitoring;
+                importCount += data.monitoring.length;
+            }
+            if (data.reports && Array.isArray(data.reports)) {
+                db.reports = data.reports;
+                importCount += data.reports.length;
+            }
+            if (data.faunaSightings && Array.isArray(data.faunaSightings)) {
+                db.faunaSightings = data.faunaSightings;
+                importCount += data.faunaSightings.length;
+            }
+            if (data.vegetationSurveys && Array.isArray(data.vegetationSurveys)) {
+                db.vegetationSurveys = data.vegetationSurveys;
+                importCount += data.vegetationSurveys.length;
+            }
+            if (data.complianceChecklist && Array.isArray(data.complianceChecklist)) {
+                db.complianceChecklist = data.complianceChecklist;
+            }
+            if (data.settings && typeof data.settings === 'object') {
+                db.settings = data.settings;
+            }
+            if (data.sites && Array.isArray(data.sites)) {
+                db.sites = data.sites;
+                importCount += data.sites.length;
+            }
+            if (data.siteMaps && typeof data.siteMaps === 'object') {
+                db.siteMaps = data.siteMaps;
+            }
+            if (data.mapFeatures && typeof data.mapFeatures === 'object') {
+                db.mapFeatures = data.mapFeatures;
+            }
+            
+            // Set current site if it exists in imported data
+            if (data.currentSiteId && db.sites.some(s => s && s.id === data.currentSiteId)) {
+                db.currentSiteId = data.currentSiteId;
+            } else if (db.sites.length > 0) {
+                db.currentSiteId = db.sites[0].id;
+            }
+            
+            this.showToast('Success', `Imported ${importCount} records successfully!`);
+            return true;
+        } catch (e) {
+            console.error('Import error:', e);
+            this.showToast('Error', 'Failed to import data - invalid format', 'error');
+            return false;
+        }
+    },
 
-                formatDateTime: function(dateTimeString) {
-                    if (!dateTimeString) return 'Not specified';
-                    try {
-                        const date = new Date(dateTimeString);
-                        if (isNaN(date.getTime())) return 'Invalid date';
-                        return date.toLocaleDateString('en-AU', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } catch (e) {
-                        return dateTimeString;
-                    }
-                },
+    // ========== EXISTING UTILITIES (keep these as they are) ==========
+    
+    sanitizeHTML: function(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    },
 
-                capitalize: function(str) {
-                    if (!str) return '';
-                    return str.charAt(0).toUpperCase() + str.slice(1);
-                },
+    formatDate: function(dateString) {
+        if (!dateString) return 'Not specified';
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'Invalid date';
+            return date.toLocaleDateString('en-AU', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        } catch (e) {
+            return dateString;
+        }
+    },
 
-                showToast: function(title, message, type = 'success') {
-                    const container = document.getElementById('toastContainer');
-                    if (!container) {
-                        // Create toast container if it doesn't exist
-                        const newContainer = document.createElement('div');
-                        newContainer.id = 'toastContainer';
-                        newContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-                        document.body.appendChild(newContainer);
-                    }
+    formatDateTime: function(dateTimeString) {
+        if (!dateTimeString) return 'Not specified';
+        try {
+            const date = new Date(dateTimeString);
+            if (isNaN(date.getTime())) return 'Invalid date';
+            return date.toLocaleDateString('en-AU', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            return dateTimeString;
+        }
+    },
 
-                    const toastId = 'toast-' + Date.now();
-                    const bgClass = type === 'success' ? 'bg-success' :
-                                   type === 'error' ? 'bg-danger' :
-                                   type === 'warning' ? 'bg-warning' : 'bg-info';
+    capitalize: function(str) {
+        if (!str) return '';
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    },
 
-                    const toastHtml = `
-                        <div id="${toastId}" class="toast ${bgClass} text-white fade show" role="alert" aria-live="assertive" aria-atomic="true">
-                            <div class="toast-header ${bgClass} text-white">
-                                <strong class="me-auto">${Utils.sanitizeHTML(title)}</strong>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+    showToast: function(title, message, type = 'success') {
+        let container = document.getElementById('toastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(container);
+        }
+
+        const toastId = 'toast-' + Date.now();
+        const bgClass = type === 'success' ? 'bg-success' :
+                       type === 'error' ? 'bg-danger' :
+                       type === 'warning' ? 'bg-warning' : 'bg-info';
+
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${bgClass} text-white fade show" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header ${bgClass} text-white">
+                    <strong class="me-auto">${this.sanitizeHTML(title)}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${this.sanitizeHTML(message)}
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', toastHtml);
+        
+        const toastElement = document.getElementById(toastId);
+        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+            toast.show();
+            toastElement.addEventListener('hidden.bs.toast', function() { this.remove(); });
+        }
+    },
+
+    showConfirmation: function(title, message, onConfirm) {
+        let modalElement = document.getElementById('modalConfirm');
+        if (!modalElement) {
+            const modalHtml = `
+                <div class="modal fade" id="modalConfirm" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="modalConfirmLabel">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>Confirm
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="toast-body">
-                                ${Utils.sanitizeHTML(message)}
+                            <div class="modal-body" id="confirmModalBody"></div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
                             </div>
                         </div>
-                    `;
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modalElement = document.getElementById('modalConfirm');
+        }
+        
+        const modal = new bootstrap.Modal(modalElement);
+        const confirmBody = document.getElementById('confirmModalBody');
+        const confirmLabel = document.getElementById('modalConfirmLabel');
+        
+        if (confirmBody) confirmBody.innerHTML = this.sanitizeHTML(message);
+        if (confirmLabel) confirmLabel.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${this.sanitizeHTML(title)}`;
+        
+        const confirmBtn = document.getElementById('confirmActionBtn');
+        if (!confirmBtn) return;
+        
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        newBtn.id = 'confirmActionBtn';
+        
+        newBtn.addEventListener('click', function() {
+            onConfirm();
+            modal.hide();
+        });
+        
+        modal.show();
+    },
 
-                    const containerElement = document.getElementById('toastContainer') || newContainer;
-                    containerElement.insertAdjacentHTML('beforeend', toastHtml);
-                    
-                    const toastElement = document.getElementById(toastId);
-                    if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
-                        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
-                        toast.show();
+    generateId: function() {
+        return Date.now() + Math.floor(Math.random() * 1000);
+    },
 
-                        toastElement.addEventListener('hidden.bs.toast', function() {
-                            this.remove();
-                        });
-                    }
+    filterByCurrentSite: function(data) {
+        if (!db.currentSiteId || !data) return [];
+        return data.filter(item => item && item.siteId === db.currentSiteId);
+    },
+
+    getCurrentSite: function() {
+        return db.sites.find(site => site && site.id === db.currentSiteId);
+    },
+
+    generateSiteLocation: function(siteId) {
+        const baseLat = -33.4000;
+        const baseLng = 150.3000;
+        
+        const idNum = typeof siteId === 'number' ? siteId : 
+                     (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
+        
+        const latOffset = (idNum % 10) * 0.05;
+        const lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
+        
+        return {
+            center: [baseLat + latOffset, baseLng + lngOffset],
+            zones: [
+                {
+                    name: 'Zone 1 - Native Forest',
+                    coords: [
+                        [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
+                        [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                        [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                        [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
+                    ],
+                    color: '#3498db'
                 },
-
-                showConfirmation: function(title, message, onConfirm) {
-                    const modalElement = document.getElementById('modalConfirm');
-                    if (!modalElement) {
-                        // Create confirmation modal if it doesn't exist
-                        this.createConfirmationModal();
-                    }
-                    
-                    const modal = new bootstrap.Modal(document.getElementById('modalConfirm'));
-                    const confirmBody = document.getElementById('confirmModalBody');
-                    const confirmLabel = document.getElementById('modalConfirmLabel');
-                    
-                    if (confirmBody) confirmBody.innerHTML = this.sanitizeHTML(message);
-                    if (confirmLabel) confirmLabel.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${this.sanitizeHTML(title)}`;
-                    
-                    const confirmBtn = document.getElementById('confirmActionBtn');
-                    if (!confirmBtn) return;
-                    
-                    const newBtn = confirmBtn.cloneNode(true);
-                    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-                    newBtn.id = 'confirmActionBtn';
-                    
-                    newBtn.addEventListener('click', function() {
-                        onConfirm();
-                        modal.hide();
-                    });
-                    
-                    modal.show();
+                {
+                    name: 'Zone 2 - Wetland Area',
+                    coords: [
+                        [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
+                        [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
+                        [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
+                        [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
+                    ],
+                    color: '#27ae60'
                 },
+                {
+                    name: 'Zone 3 - Weed Control Area',
+                    coords: [
+                        [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
+                        [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
+                        [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
+                        [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
+                    ],
+                    color: '#e74c3c'
+                }
+            ],
+            vegetationMarkers: [
+                { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
+                { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
+                { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
+            ],
+            weedMarkers: [
+                { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
+                { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
+                { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
+            ]
+        };
+    },
 
-                createConfirmationModal: function() {
-                    const modalHtml = `
-                        <div class="modal fade" id="modalConfirm" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title" id="modalConfirmLabel">
-                                            <i class="bi bi-exclamation-triangle me-2"></i>Confirm
-                                        </h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <div class="modal-body" id="confirmModalBody"></div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                        <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    document.body.insertAdjacentHTML('beforeend', modalHtml);
-                },
-
-                generateId: function() {
-                    return Date.now() + Math.floor(Math.random() * 1000);
-                },
-
-                filterByCurrentSite: function(data) {
-                    if (!db.currentSiteId || !data) return [];
-                    return data.filter(item => item && item.siteId === db.currentSiteId);
-                },
-
-                getCurrentSite: function() {
-                    return db.sites.find(site => site.id === db.currentSiteId);
-                },
-
-                generateSiteLocation: function(siteId) {
-                    const baseLat = -33.4000;
-                    const baseLng = 150.3000;
-                    
-                    const idNum = typeof siteId === 'number' ? siteId : 
-                                 (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
-                    
-                    const latOffset = (idNum % 10) * 0.05;
-                    const lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
-                    
-                    return {
-                        center: [baseLat + latOffset, baseLng + lngOffset],
-                        zones: [
-                            {
-                                name: 'Zone 1 - Native Forest',
-                                coords: [
-                                    [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                                    [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                                    [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
-                                ],
-                                color: '#3498db'
-                            },
-                            {
-                                name: 'Zone 2 - Wetland Area',
-                                coords: [
-                                    [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
-                                    [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
-                                    [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
-                                    [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
-                                ],
-                                color: '#27ae60'
-                            },
-                            {
-                                name: 'Zone 3 - Weed Control Area',
-                                coords: [
-                                    [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
-                                    [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
-                                ],
-                                color: '#e74c3c'
-                            }
-                        ],
-                        vegetationMarkers: [
-                            { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
-                            { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
-                            { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
-                        ],
-                        weedMarkers: [
-                            { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
-                            { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
-                            { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
-                        ]
-                    };
-                },
-
-                getSiteHealthData: function(siteId) {
-                    if (!siteId) return this.getDefaultHealthData();
-                    
-                    const siteAssessments = db.assessments.filter(a => a && a.siteId === siteId);
-                    
-                    let healthData = {
-                        biodiversity: 78,
-                        nativeCover: 65,
-                        weedPressure: 22,
-                        erosion: 15,
-                        faunaActivity: 70,
-                        waterQuality: 85,
-                        previousBiodiversity: 72,
-                        previousNativeCover: 60,
-                        previousWeedPressure: 28,
-                        previousErosion: 18,
-                        previousFaunaActivity: 65,
-                        previousWaterQuality: 80
-                    };
-                    
-                    if (siteAssessments.length > 0) {
-                        const sorted = [...siteAssessments].sort((a, b) => new Date(b.date) - new Date(a.date));
-                        const latest = sorted[0];
-                        const previous = sorted[1] || sorted[0];
-                        
-                        const healthScore = (health) => {
-                            switch(health) {
-                                case 'excellent': return 90;
-                                case 'good': return 75;
-                                case 'fair': return 55;
-                                case 'poor': return 30;
-                                case 'degraded': return 15;
-                                default: return 50;
-                            }
-                        };
-                        
-                        const latestScore = healthScore(latest.health);
-                        const previousScore = healthScore(previous.health);
-                        
-                        healthData = {
-                            biodiversity: latestScore,
-                            nativeCover: latestScore - (latest.threats && latest.threats.includes('weeds') ? 10 : 0),
-                            weedPressure: 100 - latestScore + (latest.threats && latest.threats.includes('weeds') ? 20 : 10),
-                            erosion: latest.threats && latest.threats.includes('erosion') ? 40 : 15,
-                            faunaActivity: latestScore - 5,
-                            waterQuality: latest.components && latest.components.includes('water') ? latestScore : 70,
-                            previousBiodiversity: previousScore,
-                            previousNativeCover: previousScore - (previous.threats && previous.threats.includes('weeds') ? 10 : 0),
-                            previousWeedPressure: 100 - previousScore + (previous.threats && previous.threats.includes('weeds') ? 20 : 10),
-                            previousErosion: previous.threats && previous.threats.includes('erosion') ? 40 : 15,
-                            previousFaunaActivity: previousScore - 5,
-                            previousWaterQuality: previous.components && previous.components.includes('water') ? previousScore : 70
-                        };
-                        
-                        Object.keys(healthData).forEach(key => {
-                            healthData[key] = Math.min(100, Math.max(0, healthData[key]));
-                        });
-                    }
-                    
-                    return healthData;
-                },
-
-                getDefaultHealthData: function() {
-                    return {
-                        biodiversity: 78,
-                        nativeCover: 65,
-                        weedPressure: 22,
-                        erosion: 15,
-                        faunaActivity: 70,
-                        waterQuality: 85,
-                        previousBiodiversity: 72,
-                        previousNativeCover: 60,
-                        previousWeedPressure: 28,
-                        previousErosion: 18,
-                        previousFaunaActivity: 65,
-                        previousWaterQuality: 80
-                    };
+    getSiteHealthData: function(siteId) {
+        if (!siteId) return this.getDefaultHealthData();
+        
+        const siteAssessments = db.assessments.filter(a => a && a.siteId === siteId);
+        
+        let healthData = {
+            biodiversity: 78,
+            nativeCover: 65,
+            weedPressure: 22,
+            erosion: 15,
+            faunaActivity: 70,
+            waterQuality: 85,
+            previousBiodiversity: 72,
+            previousNativeCover: 60,
+            previousWeedPressure: 28,
+            previousErosion: 18,
+            previousFaunaActivity: 65,
+            previousWaterQuality: 80
+        };
+        
+        if (siteAssessments.length > 0) {
+            const sorted = [...siteAssessments].sort((a, b) => new Date(b.date) - new Date(a.date));
+            const latest = sorted[0];
+            const previous = sorted[1] || sorted[0];
+            
+            const healthScore = (health) => {
+                switch(health) {
+                    case 'excellent': return 90;
+                    case 'good': return 75;
+                    case 'fair': return 55;
+                    case 'poor': return 30;
+                    case 'degraded': return 15;
+                    default: return 50;
                 }
             };
+            
+            const latestScore = healthScore(latest.health);
+            const previousScore = healthScore(previous.health);
+            
+            healthData = {
+                biodiversity: latestScore,
+                nativeCover: latestScore - (latest.threats && latest.threats.includes('weeds') ? 10 : 0),
+                weedPressure: 100 - latestScore + (latest.threats && latest.threats.includes('weeds') ? 20 : 10),
+                erosion: latest.threats && latest.threats.includes('erosion') ? 40 : 15,
+                faunaActivity: latestScore - 5,
+                waterQuality: latest.components && latest.components.includes('water') ? latestScore : 70,
+                previousBiodiversity: previousScore,
+                previousNativeCover: previousScore - (previous.threats && previous.threats.includes('weeds') ? 10 : 0),
+                previousWeedPressure: 100 - previousScore + (previous.threats && previous.threats.includes('weeds') ? 20 : 10),
+                previousErosion: previous.threats && previous.threats.includes('erosion') ? 40 : 15,
+                previousFaunaActivity: previousScore - 5,
+                previousWaterQuality: previous.components && previous.components.includes('water') ? previousScore : 70
+            };
+            
+            Object.keys(healthData).forEach(key => {
+                healthData[key] = Math.min(100, Math.max(0, healthData[key]));
+            });
+        }
+        
+        return healthData;
+    },
+
+    getDefaultHealthData: function() {
+        return {
+            biodiversity: 78,
+            nativeCover: 65,
+            weedPressure: 22,
+            erosion: 15,
+            faunaActivity: 70,
+            waterQuality: 85,
+            previousBiodiversity: 72,
+            previousNativeCover: 60,
+            previousWeedPressure: 28,
+            previousErosion: 18,
+            previousFaunaActivity: 65,
+            previousWaterQuality: 80
+        };
+    }
+};
 
             // ==================== MAP EDITING FUNCTIONS ====================
             const MapEditor = {
@@ -4603,6 +4769,55 @@
                     }
                 },
 
+importDataFromFile: function() {
+    // Create file input dynamically
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.style.display = 'none';
+    
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            const text = await file.text();
+            Utils.showToast('Info', 'Importing data...', 'info');
+            
+            if (Utils.importData(text)) {
+                Utils.saveData();
+                
+                // Refresh all UI components
+                SiteManager.loadSiteSelector();
+                this.loadAllData();
+                
+                // Refresh map if on dashboard
+                if (window.map) {
+                    this.initMap();
+                }
+                
+                // Refresh calendar
+                if (window.calendar) {
+                    try {
+                        window.calendar.refetchEvents();
+                    } catch (e) {
+                        console.error('Calendar refresh error:', e);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Import error:', error);
+            Utils.showToast('Error', 'Failed to read file', 'error');
+        }
+        
+        document.body.removeChild(fileInput);
+    });
+    
+    document.body.appendChild(fileInput);
+    fileInput.click();
+},
+
+
                 loadInitialData: function() {
                     const siteId = db.currentSiteId || (db.sites.length > 0 ? db.sites[0].id : null);
                     
@@ -5419,64 +5634,73 @@
                     new bootstrap.Modal(document.getElementById('modalViewAssessment')).show();
                 },
 
-                saveAssessment: function() {
-                    const form = document.getElementById('formNewAssessment');
-                    if (!form) return;
-                    
-                    if (!form.checkValidity()) {
-                        form.classList.add('was-validated');
-                        
-                        const components = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
-                        if (components.length === 0) {
-                            const feedback = document.getElementById('componentsFeedback');
-                            if (feedback) feedback.style.display = 'block';
-                        }
-                        return;
-                    }
+saveAssessment: async function() {
+    const form = document.getElementById('formNewAssessment');
+    if (!form) return;
+    
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        
+        const components = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
+        if (components.length === 0) {
+            const feedback = document.getElementById('componentsFeedback');
+            if (feedback) feedback.style.display = 'block';
+        }
+        return;
+    }
 
-                    const components = Array.from(document.querySelectorAll('#formNewAssessment input[name="components"]:checked'))
-                        .map(cb => cb.value);
-                    
-                    if (components.length === 0) {
-                        const feedback = document.getElementById('componentsFeedback');
-                        if (feedback) feedback.style.display = 'block';
-                        return;
-                    }
+    const components = Array.from(document.querySelectorAll('#formNewAssessment input[name="components"]:checked'))
+        .map(cb => cb.value);
+    
+    if (components.length === 0) {
+        const feedback = document.getElementById('componentsFeedback');
+        if (feedback) feedback.style.display = 'block';
+        return;
+    }
 
-                    const threatsSelect = document.getElementById('modalThreats');
-                    const threats = threatsSelect ? Array.from(threatsSelect.selectedOptions).map(opt => opt.value) : [];
+    const threatsSelect = document.getElementById('modalThreats');
+    const threats = threatsSelect ? Array.from(threatsSelect.selectedOptions).map(opt => opt.value) : [];
 
-                    const newAssessment = {
-                        id: Utils.generateId(),
-                        siteId: db.currentSiteId,
-                        date: document.getElementById('modalAssessmentDate').value,
-                        assessor: document.getElementById('modalAssessorName').value,
-                        description: document.getElementById('modalSiteDescription').value,
-                        components: components,
-                        health: document.getElementById('modalEcosystemHealth').value,
-                        threats: threats,
-                        photos: [],
-                        createdAt: new Date().toISOString()
-                    };
+    // Handle photos - convert to Base64 with compression and limit of 5 photos
+    const photoInput = document.getElementById('modalAssessmentPhotos');
+    let photos = [];
+    if (photoInput && photoInput.files && photoInput.files.length > 0) {
+        Utils.showToast('Info', 'Processing images (max 5, auto-compressed)...', 'info');
+        photos = await Utils.convertMultipleImagesToBase64(Array.from(photoInput.files), 5);
+        Utils.showToast('Success', `${photos.length} image(s) saved and compressed`, 'success');
+    }
 
-                    db.assessments.push(newAssessment);
-                    
-                    if (Utils.saveData()) {
-                        form.reset();
-                        form.classList.remove('was-validated');
-                        const feedback = document.getElementById('componentsFeedback');
-                        if (feedback) feedback.style.display = 'none';
-                        
-                        const preview = document.getElementById('assessmentPhotoPreview');
-                        if (preview) preview.innerHTML = '';
-                        
-                        bootstrap.Modal.getInstance(document.getElementById('modalNewAssessment')).hide();
-                        Utils.showToast('Success', 'Assessment saved successfully!');
-                        
-                        this.loadAssessments();
-                        this.loadDashboard();
-                    }
-                },
+    const newAssessment = {
+        id: Utils.generateId(),
+        siteId: db.currentSiteId,
+        date: document.getElementById('modalAssessmentDate').value,
+        assessor: document.getElementById('modalAssessorName').value,
+        description: document.getElementById('modalSiteDescription').value,
+        components: components,
+        health: document.getElementById('modalEcosystemHealth').value,
+        threats: threats,
+        photos: photos,
+        createdAt: new Date().toISOString()
+    };
+
+    db.assessments.push(newAssessment);
+    
+    if (Utils.saveData()) {
+        form.reset();
+        form.classList.remove('was-validated');
+        const feedback = document.getElementById('componentsFeedback');
+        if (feedback) feedback.style.display = 'none';
+        
+        const preview = document.getElementById('assessmentPhotoPreview');
+        if (preview) preview.innerHTML = '';
+        
+        bootstrap.Modal.getInstance(document.getElementById('modalNewAssessment')).hide();
+        Utils.showToast('Success', 'Assessment saved successfully!');
+        
+        this.loadAssessments();
+        this.loadDashboard();
+    }
+},
 
                 loadSpecies: function() {
                     const filteredSpecies = Utils.filterByCurrentSite(db.species);
@@ -5643,51 +5867,58 @@
                     MapEditor.populateSpeciesDropdown('editFeatureSpecies');
                 },
 
-                saveSpecies: function() {
-                    const form = document.getElementById('formNewSpecies');
-                    if (!form) return;
-                    
-                    if (!form.checkValidity()) {
-                        form.classList.add('was-validated');
-                        return;
-                    }
+saveSpecies: async function() {
+    const form = document.getElementById('formNewSpecies');
+    if (!form) return;
+    
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+    }
 
-                    let image = '';
-                    const fileInput = document.getElementById('speciesImage');
-                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                        image = URL.createObjectURL(fileInput.files[0]);
-                    }
+    let image = '';
+    const fileInput = document.getElementById('speciesImage');
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        Utils.showToast('Info', 'Processing image (auto-compressed)...', 'info');
+        image = await Utils.convertImageToBase64(fileInput.files[0]);
+        if (image) {
+            Utils.showToast('Success', 'Image saved and compressed', 'success');
+        }
+    }
 
-                    const newSpecies = {
-                        id: Utils.generateId(),
-                        siteId: db.currentSiteId,
-                        scientificName: document.getElementById('speciesScientificName').value,
-                        commonName: document.getElementById('speciesCommonName').value || null,
-                        type: document.getElementById('speciesType').value,
-                        status: document.getElementById('speciesStatus').value,
-                        description: document.getElementById('speciesDescription').value,
-                        habitat: document.getElementById('speciesHabitat').value || null,
-                        lastObserved: document.getElementById('speciesLastObserved').value || null,
-                        image: image,
-                        notes: document.getElementById('speciesNotes').value,
-                        createdAt: new Date().toISOString()
-                    };
+    const newSpecies = {
+        id: Utils.generateId(),
+        siteId: db.currentSiteId,
+        scientificName: document.getElementById('speciesScientificName').value,
+        commonName: document.getElementById('speciesCommonName').value || null,
+        type: document.getElementById('speciesType').value,
+        status: document.getElementById('speciesStatus').value,
+        description: document.getElementById('speciesDescription').value,
+        habitat: document.getElementById('speciesHabitat').value || null,
+        lastObserved: document.getElementById('speciesLastObserved').value || null,
+        image: image,
+        notes: document.getElementById('speciesNotes').value,
+        createdAt: new Date().toISOString()
+    };
 
-                    db.species.push(newSpecies);
-                    
-                    if (Utils.saveData()) {
-                        form.reset();
-                        form.classList.remove('was-validated');
-                        const preview = document.getElementById('speciesImagePreview');
-                        if (preview) preview.style.display = 'none';
-                        
-                        bootstrap.Modal.getInstance(document.getElementById('modalNewSpecies')).hide();
-                        Utils.showToast('Success', 'Species record saved successfully!');
-                        
-                        this.loadSpecies();
-                        this.loadDashboard();
-                    }
-                },
+    db.species.push(newSpecies);
+    
+    if (Utils.saveData()) {
+        form.reset();
+        form.classList.remove('was-validated');
+        const preview = document.getElementById('speciesImagePreview');
+        if (preview) {
+            preview.style.display = 'none';
+            preview.src = '#';
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('modalNewSpecies')).hide();
+        Utils.showToast('Success', 'Species record saved successfully!');
+        
+        this.loadSpecies();
+        this.loadDashboard();
+    }
+},
 
                 showSpeciesDetails: function(species) {
                     const modalBody = document.getElementById('speciesModalBody');
@@ -7264,6 +7495,11 @@
                     if (deleteMapFeatureBtn) {
                         deleteMapFeatureBtn.addEventListener('click', () => MapEditor.deleteFeature());
                     }
+
+const importDataBtn = document.getElementById('importDataBtn');
+if (importDataBtn) {
+    importDataBtn.addEventListener('click', () => this.importDataFromFile());
+}
 
                     // Delegate click events for feature edit buttons
                     document.addEventListener('click', (e) => {
