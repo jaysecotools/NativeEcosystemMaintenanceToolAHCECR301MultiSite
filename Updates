@@ -1,77 +1,186 @@
-You're right - the button isn't showing. Looking back at your HTML, I can see the issue. You placed the import button code inside a comment block!
+Looking at your code, I can identify the issue with your maps not displaying. The problem is in the map initialization sequence and how the map container is being handled.
 
-Look at your Settings tab HTML around line 800-900. You have:
+The Issue
 
-```html
-<div class="d-grid gap-2">
-    <button class="btn btn-outline-secondary" id="exportAllDataBtn">
-        <i class="bi bi-download me-2" aria-hidden="true"></i>
-        Export All Data
-    </button>
+The map fails to initialize because:
+
+1. Race condition: The map tries to initialize before the DOM is fully ready
+2. Missing map container styling: The #map element needs explicit dimensions
+3. Improper map re-initialization: When switching sites, the old map isn't properly destroyed
+
+The Fix
+
+Here are the key changes needed. Replace your existing initMap function with this corrected version:
+
+```javascript
+initMap: function() {
+    console.log('Initializing map...');
     
-    <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
-        <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
-        Backup Database
-    </button>
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found');
+        return;
+    }
+
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
     
-    <button class="btn btn-outline-danger" id="resetTestDataBtn">
-        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
-        Reset Test Data
-    </button>
-</div>
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected. Please create a site first.</div>';
+        return;
+    }
+    
+    let mapData = db.siteMaps[siteId];
+    if (!mapData) {
+        mapData = Utils.generateSiteLocation(siteId);
+        db.siteMaps[siteId] = mapData;
+        Utils.saveData();
+    }
+    
+    try {
+        // CRITICAL: Clean up existing map properly
+        if (window.map) {
+            window.map.off();
+            window.map.remove();
+            window.map = null;
+        }
+        
+        // Ensure container has proper dimensions and is visible
+        mapContainer.style.height = '500px';
+        mapContainer.style.width = '100%';
+        mapContainer.style.display = 'block';
+        
+        // Clear any existing content
+        mapContainer.innerHTML = '';
+        
+        // Check if Leaflet is available
+        if (typeof L === 'undefined') {
+            mapContainer.innerHTML = '<div class="alert alert-warning">Leaflet library not loaded. Please check your internet connection.</div>';
+            return;
+        }
+        
+        // Wait for container to be ready
+        setTimeout(() => {
+            if (!mapContainer.isConnected) return;
+            
+            // Create new map
+            window.map = L.map('map', {
+                center: mapData.center,
+                zoom: 13,
+                zoomControl: true,
+                fadeAnimation: true,
+                zoomAnimation: true
+            });
+
+            // Add tile layer with error handling
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+                detectRetina: true,
+                errorTileUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="256" height="256"%3E%3Crect width="256" height="256" fill="%23f0f0f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ETile Error%3C/text%3E%3C/svg%3E'
+            }).addTo(window.map);
+
+            // Add main site marker
+            L.marker(mapData.center).addTo(window.map)
+                .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
+                .openPopup();
+
+            // Create layers
+            this.createMapLayers(mapData);
+            
+            // Initialize editing tools (only if Geoman is available)
+            if (typeof MapEditor !== 'undefined' && MapEditor.initEditing) {
+                MapEditor.initEditing();
+            }
+            
+            // Force map to recalculate size
+            setTimeout(() => {
+                if (window.map && mapContainer.isConnected) {
+                    window.map.invalidateSize(true);
+                    console.log('Map size invalidated');
+                }
+            }, 100);
+            
+            console.log('Map initialized successfully');
+        }, 50);
+        
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please refresh the page.</div>';
+    }
+},
 ```
 
-The import button HTML I gave you was never added to this section. Let me give you the exact HTML to add - copy and paste this:
+Also update the CSS to ensure the map container is properly styled. Add this to your existing styles:
 
-Find this exact spot in your HTML (around line 850-900):
+```css
+/* Fix map container - ensure visibility */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
 
-```html
-<div class="d-grid gap-2">
-    <button class="btn btn-outline-secondary" id="exportAllDataBtn">
-        <i class="bi bi-download me-2" aria-hidden="true"></i>
-        Export All Data
-    </button>
-    
-    <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
-        <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
-        Backup Database
-    </button>
-    
-    <button class="btn btn-outline-danger" id="resetTestDataBtn">
-        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
-        Reset Test Data
-    </button>
-</div>
+#map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa;
+    min-height: 500px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile-container {
+    pointer-events: auto;
+}
+
+.leaflet-container {
+    background: #f8f9fa;
+}
+
+/* Fix for map when hidden initially */
+.tab-pane:not(.show) #map {
+    visibility: hidden;
+}
+
+.tab-pane.show #map {
+    visibility: visible;
+}
 ```
 
-Replace it with this:
+And add this event listener to handle tab switching:
 
-```html
-<div class="d-grid gap-2">
-    <button class="btn btn-outline-secondary" id="exportAllDataBtn">
-        <i class="bi bi-download me-2" aria-hidden="true"></i>
-        Export All Data
-    </button>
-    
-    <button class="btn btn-outline-primary" id="importDataBtn">
-        <i class="bi bi-upload me-2" aria-hidden="true"></i>
-        Import Data (JSON)
-    </button>
-    
-    <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
-        <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
-        Backup Database
-    </button>
-    
-    <button class="btn btn-outline-danger" id="resetTestDataBtn">
-        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
-        Reset Test Data
-    </button>
-</div>
+```javascript
+// Add this to your setupEventListeners function
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', (e) => {
+        const target = e.target.getAttribute('data-bs-target');
+        
+        // Refresh map when dashboard tab is shown
+        if (target === '#dashboard' && window.map) {
+            setTimeout(() => {
+                if (window.map) {
+                    window.map.invalidateSize(true);
+                } else {
+                    App.initMap();
+                }
+            }, 300);
+        }
+    });
+});
 ```
 
-The key difference is the blue button (btn-outline-primary) added right after the Export button.
+Summary of Changes
 
-Once you add this HTML, refresh the page, and the Import button will appear in your Settings tab under Data Management.
+1. Proper cleanup: The old map is completely destroyed before creating a new one
+2. Delayed initialization: Uses setTimeout to ensure the DOM is ready
+3. Container verification: Checks if the map container is still connected to the DOM
+4. Error handling: Better error messages and fallbacks
+5. Tab visibility handling: Refreshes map when switching to dashboard tab
 
-The JavaScript event listener you already added is correct and will work once the button exists on the page!
+These changes should resolve your map display issues. The key problem was that the map was trying to initialize before the DOM container was fully ready, and old map instances weren't being properly destroyed when switching sites.
