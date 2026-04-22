@@ -1,186 +1,89 @@
-Looking at your code, I can identify the issue with your maps not displaying. The problem is in the map initialization sequence and how the map container is being handled.
+You need to place this code inside the setupEventListeners function in your existing JavaScript. Here's exactly where:
 
-The Issue
+Location in your code
 
-The map fails to initialize because:
+Look for the setupEventListeners function in your script. It should be around line 3980-4000 (near the end of the script). Inside that function, you'll see many if statements adding event listeners.
 
-1. Race condition: The map tries to initialize before the DOM is fully ready
-2. Missing map container styling: The #map element needs explicit dimensions
-3. Improper map re-initialization: When switching sites, the old map isn't properly destroyed
-
-The Fix
-
-Here are the key changes needed. Replace your existing initMap function with this corrected version:
+Find this section:
 
 ```javascript
-initMap: function() {
-    console.log('Initializing map...');
-    
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map element not found');
-        return;
+setupEventListeners: function() {
+    const siteSelector = document.getElementById('siteSelector');
+    if (siteSelector) {
+        siteSelector.addEventListener('change', (e) => {
+            // ... existing code ...
+        });
     }
 
-    const siteId = db.currentSiteId;
-    const site = Utils.getCurrentSite();
-    
-    if (!site) {
-        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected. Please create a site first.</div>';
-        return;
-    }
-    
-    let mapData = db.siteMaps[siteId];
-    if (!mapData) {
-        mapData = Utils.generateSiteLocation(siteId);
-        db.siteMaps[siteId] = mapData;
-        Utils.saveData();
-    }
-    
-    try {
-        // CRITICAL: Clean up existing map properly
-        if (window.map) {
-            window.map.off();
-            window.map.remove();
-            window.map = null;
-        }
-        
-        // Ensure container has proper dimensions and is visible
-        mapContainer.style.height = '500px';
-        mapContainer.style.width = '100%';
-        mapContainer.style.display = 'block';
-        
-        // Clear any existing content
-        mapContainer.innerHTML = '';
-        
-        // Check if Leaflet is available
-        if (typeof L === 'undefined') {
-            mapContainer.innerHTML = '<div class="alert alert-warning">Leaflet library not loaded. Please check your internet connection.</div>';
-            return;
-        }
-        
-        // Wait for container to be ready
-        setTimeout(() => {
-            if (!mapContainer.isConnected) return;
-            
-            // Create new map
-            window.map = L.map('map', {
-                center: mapData.center,
-                zoom: 13,
-                zoomControl: true,
-                fadeAnimation: true,
-                zoomAnimation: true
-            });
+    // ... many other event listeners ...
 
-            // Add tile layer with error handling
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                maxZoom: 19,
-                detectRetina: true,
-                errorTileUrl: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="256" height="256"%3E%3Crect width="256" height="256" fill="%23f0f0f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ETile Error%3C/text%3E%3C/svg%3E'
-            }).addTo(window.map);
-
-            // Add main site marker
-            L.marker(mapData.center).addTo(window.map)
-                .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
-                .openPopup();
-
-            // Create layers
-            this.createMapLayers(mapData);
-            
-            // Initialize editing tools (only if Geoman is available)
-            if (typeof MapEditor !== 'undefined' && MapEditor.initEditing) {
-                MapEditor.initEditing();
-            }
-            
-            // Force map to recalculate size
-            setTimeout(() => {
-                if (window.map && mapContainer.isConnected) {
-                    window.map.invalidateSize(true);
-                    console.log('Map size invalidated');
-                }
-            }, 100);
-            
-            console.log('Map initialized successfully');
-        }, 50);
-        
-    } catch (error) {
-        console.error('Error initializing map:', error);
-        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please refresh the page.</div>';
-    }
-},
-```
-
-Also update the CSS to ensure the map container is properly styled. Add this to your existing styles:
-
-```css
-/* Fix map container - ensure visibility */
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-}
-
-#map {
-    height: 100%;
-    width: 100%;
-    border-radius: 8px;
-    background: #f8f9fa;
-    min-height: 500px;
-    position: relative;
-    z-index: 1;
-}
-
-/* Ensure map tiles load properly */
-.leaflet-tile-container {
-    pointer-events: auto;
-}
-
-.leaflet-container {
-    background: #f8f9fa;
-}
-
-/* Fix for map when hidden initially */
-.tab-pane:not(.show) #map {
-    visibility: hidden;
-}
-
-.tab-pane.show #map {
-    visibility: visible;
+    // Look for this section near the end of the function:
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', (e) => {
+            // ... EXISTING CODE HERE ...
+        });
+    });
 }
 ```
 
-And add this event listener to handle tab switching:
+Replace the existing document.querySelectorAll('[data-bs-toggle="tab"]') section with the new code.
+
+Complete replacement section:
+
+Find the existing tab event listener code and replace the entire block with:
 
 ```javascript
-// Add this to your setupEventListeners function
+// Tab change event listeners - refresh content when tabs are shown
 document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
     tab.addEventListener('shown.bs.tab', (e) => {
         const target = e.target.getAttribute('data-bs-target');
         
-        // Refresh map when dashboard tab is shown
-        if (target === '#dashboard' && window.map) {
+        if (target === '#dashboard') {
+            this.loadDashboard();
+            // Refresh map when dashboard tab is shown
             setTimeout(() => {
                 if (window.map) {
                     window.map.invalidateSize(true);
                 } else {
-                    App.initMap();
+                    this.initMap();
                 }
             }, 300);
+        } else if (target === '#site-assessment') {
+            this.loadAssessments();
+        } else if (target === '#maintenance-plan') {
+            this.loadActivities();
+            if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
+        } else if (target === '#species-register') {
+            this.loadSpecies();
+        } else if (target === '#monitoring') {
+            this.loadMonitoring();
+        } else if (target === '#reports') {
+            this.loadReports();
+        } else if (target === '#legislation') {
+            this.loadComplianceChecklist();
+        } else if (target === '#settings') {
+            this.loadSettings();
         }
     });
 });
 ```
 
-Summary of Changes
+Visual guide:
 
-1. Proper cleanup: The old map is completely destroyed before creating a new one
-2. Delayed initialization: Uses setTimeout to ensure the DOM is ready
-3. Container verification: Checks if the map container is still connected to the DOM
-4. Error handling: Better error messages and fallbacks
-5. Tab visibility handling: Refreshes map when switching to dashboard tab
+```
+setupEventListeners: function() {
+    // ... all your existing event listeners ...
+    
+    // ↓↓↓ FIND THIS SECTION ↓↓↓
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', (e) => {
+            // This is the code you need to REPLACE
+        });
+    });
+    // ↑↑↑ REPLACE THE ABOVE SECTION ↑↑↑
+    
+    // ... rest of your event listeners ...
+}
+```
 
-These changes should resolve your map display issues. The key problem was that the map was trying to initialize before the DOM container was fully ready, and old map instances weren't being properly destroyed when switching sites.
+This ensures the map refreshes properly whenever you switch to the Dashboard tab, fixing the display issue.
