@@ -59,7 +59,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     
     <!-- Leaflet Geoman CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.css"/>
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -75,7 +75,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     
     <!-- Leaflet Geoman JS -->
-    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.min.js"></script>
     
     <style>
         :root {
@@ -283,6 +283,15 @@
     border: 2px solid #dee2e6;
 }
         
+.species-image-preview {
+    max-width: 200px;
+    max-height: 200px;
+    margin-top: 10px;
+    display: none;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+}
+
         .map-controls {
             position: absolute;
             top: 10px;
@@ -3006,7 +3015,7 @@
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
 
- <script>
+<script>
         (function() {
             'use strict';
 
@@ -3078,508 +3087,486 @@
             };
 
             // ==================== UTILITY FUNCTIONS ====================
-const Utils = {
-    parseJSON: function(key, defaultValue) {
-        try {
-            const item = localStorage.getItem(key);
-            return item ? JSON.parse(item) : defaultValue;
-        } catch (e) {
-            console.error(`Error parsing ${key}:`, e);
-            return defaultValue;
-        }
-    },
-
-    saveData: function() {
-        try {
-            localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
-            localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
-            localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
-            localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
-            localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
-            localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
-            localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
-            localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
-            localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
-            localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
-            localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
-            localStorage.setItem(STORAGE_KEYS.MAP_FEATURES, JSON.stringify(db.mapFeatures));
-            return true;
-        } catch (e) {
-            console.error('Error saving data:', e);
-            this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
-            return false;
-        }
-    },
-
-    loadData: function() {
-        db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
-        db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
-        db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
-        db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
-        db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
-        db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
-        db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
-        db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
-        db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
-        db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
-        db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
-        db.mapFeatures = this.parseJSON(STORAGE_KEYS.MAP_FEATURES, {});
-        
-        // Initialize mapFeatures for existing sites if needed
-        db.sites.forEach(site => {
-            if (site && !db.mapFeatures[site.id]) {
-                db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
-            }
-        });
-    },
-
-    // ========== NEW IMAGE HANDLING FUNCTIONS ==========
-    
-    compressImage: function(base64String, maxWidth = 800, maxHeight = 800, quality = 0.7) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = function() {
-                let width = img.width;
-                let height = img.height;
-                
-                // Calculate new dimensions while maintaining aspect ratio
-                if (width > height) {
-                    if (width > maxWidth) {
-                        height = Math.round(height * (maxWidth / width));
-                        width = maxWidth;
+            const Utils = {
+                parseJSON: function(key, defaultValue) {
+                    try {
+                        const item = localStorage.getItem(key);
+                        return item ? JSON.parse(item) : defaultValue;
+                    } catch (e) {
+                        console.error(`Error parsing ${key}:`, e);
+                        return defaultValue;
                     }
-                } else {
-                    if (height > maxHeight) {
-                        width = Math.round(width * (maxHeight / height));
-                        height = maxHeight;
+                },
+
+                saveData: function() {
+                    try {
+                        localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
+                        localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
+                        localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
+                        localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
+                        localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
+                        localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
+                        localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
+                        localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
+                        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
+                        localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
+                        localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
+                        localStorage.setItem(STORAGE_KEYS.MAP_FEATURES, JSON.stringify(db.mapFeatures));
+                        return true;
+                    } catch (e) {
+                        console.error('Error saving data:', e);
+                        this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
+                        return false;
                     }
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Compress and convert back to base64
-                const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                resolve(compressedBase64);
-            };
-            img.onerror = function() {
-                resolve(base64String); // Return original if compression fails
-            };
-            img.src = base64String;
-        });
-    },
+                },
 
-    convertImageToBase64: function(file, maxSizeKB = 500) {
-        return new Promise((resolve, reject) => {
-            if (!file || !file.type.startsWith('image/')) {
-                resolve(null);
-                return;
-            }
-            
-            // Check file size before processing
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                this.showToast('Warning', `Image ${file.name} exceeds 5MB and was skipped`, 'warning');
-                resolve(null);
-                return;
-            }
-            
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                let base64 = e.target.result;
-                
-                // Compress the image
-                base64 = await Utils.compressImage(base64, 800, 800, 0.7);
-                
-                // Check final size and warn if still large
-                const sizeInKB = Math.round(base64.length * 0.75 / 1024);
-                if (sizeInKB > maxSizeKB) {
-                    Utils.showToast('Info', `Image compressed to ${sizeInKB}KB`, 'info');
-                }
-                
-                resolve(base64);
-            };
-            reader.onerror = function(e) {
-                console.error('Error converting image:', e);
-                reject(null);
-            };
-            reader.readAsDataURL(file);
-        });
-    },
+                loadData: function() {
+                    db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
+                    db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
+                    db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
+                    db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
+                    db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
+                    db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
+                    db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
+                    db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
+                    db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
+                    db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
+                    db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
+                    db.mapFeatures = this.parseJSON(STORAGE_KEYS.MAP_FEATURES, {});
+                    
+                    db.sites.forEach(site => {
+                        if (site && !db.mapFeatures[site.id]) {
+                            db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
+                        }
+                    });
+                },
 
-    convertMultipleImagesToBase64: async function(files, maxPhotos = 5) {
-        const base64Images = [];
-        const limitedFiles = files.slice(0, maxPhotos);
-        
-        if (files.length > maxPhotos) {
-            this.showToast('Warning', `Only ${maxPhotos} photos will be saved. ${files.length - maxPhotos} were skipped.`, 'warning');
-        }
-        
-        for (const file of limitedFiles) {
-            if (file && file.type.startsWith('image/')) {
-                const base64 = await this.convertImageToBase64(file);
-                if (base64) base64Images.push(base64);
-            }
-        }
-        return base64Images;
-    },
+                compressImage: function(base64String, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = function() {
+                            let width = img.width;
+                            let height = img.height;
+                            
+                            if (width > height) {
+                                if (width > maxWidth) {
+                                    height = Math.round(height * (maxWidth / width));
+                                    width = maxWidth;
+                                }
+                            } else {
+                                if (height > maxHeight) {
+                                    width = Math.round(width * (maxHeight / height));
+                                    height = maxHeight;
+                                }
+                            }
+                            
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                            resolve(compressedBase64);
+                        };
+                        img.onerror = function() {
+                            resolve(base64String);
+                        };
+                        img.src = base64String;
+                    });
+                },
 
-    // ========== NEW IMPORT FUNCTION ==========
-    
-    importData: function(jsonData) {
-        try {
-            const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-            
-            // Validate structure
-            if (!data || typeof data !== 'object') {
-                throw new Error('Invalid data format');
-            }
-            
-            let importCount = 0;
-            
-            // Import each data type if present
-            if (data.assessments && Array.isArray(data.assessments)) {
-                db.assessments = data.assessments;
-                importCount += data.assessments.length;
-            }
-            if (data.species && Array.isArray(data.species)) {
-                db.species = data.species;
-                importCount += data.species.length;
-            }
-            if (data.activities && Array.isArray(data.activities)) {
-                db.activities = data.activities;
-                importCount += data.activities.length;
-            }
-            if (data.monitoring && Array.isArray(data.monitoring)) {
-                db.monitoring = data.monitoring;
-                importCount += data.monitoring.length;
-            }
-            if (data.reports && Array.isArray(data.reports)) {
-                db.reports = data.reports;
-                importCount += data.reports.length;
-            }
-            if (data.faunaSightings && Array.isArray(data.faunaSightings)) {
-                db.faunaSightings = data.faunaSightings;
-                importCount += data.faunaSightings.length;
-            }
-            if (data.vegetationSurveys && Array.isArray(data.vegetationSurveys)) {
-                db.vegetationSurveys = data.vegetationSurveys;
-                importCount += data.vegetationSurveys.length;
-            }
-            if (data.complianceChecklist && Array.isArray(data.complianceChecklist)) {
-                db.complianceChecklist = data.complianceChecklist;
-            }
-            if (data.settings && typeof data.settings === 'object') {
-                db.settings = data.settings;
-            }
-            if (data.sites && Array.isArray(data.sites)) {
-                db.sites = data.sites;
-                importCount += data.sites.length;
-            }
-            if (data.siteMaps && typeof data.siteMaps === 'object') {
-                db.siteMaps = data.siteMaps;
-            }
-            if (data.mapFeatures && typeof data.mapFeatures === 'object') {
-                db.mapFeatures = data.mapFeatures;
-            }
-            
-            // Set current site if it exists in imported data
-            if (data.currentSiteId && db.sites.some(s => s && s.id === data.currentSiteId)) {
-                db.currentSiteId = data.currentSiteId;
-            } else if (db.sites.length > 0) {
-                db.currentSiteId = db.sites[0].id;
-            }
-            
-            this.showToast('Success', `Imported ${importCount} records successfully!`);
-            return true;
-        } catch (e) {
-            console.error('Import error:', e);
-            this.showToast('Error', 'Failed to import data - invalid format', 'error');
-            return false;
-        }
-    },
+                convertImageToBase64: function(file, maxSizeKB = 500) {
+                    return new Promise((resolve, reject) => {
+                        if (!file || !file.type.startsWith('image/')) {
+                            resolve(null);
+                            return;
+                        }
+                        
+                        if (file.size > 5 * 1024 * 1024) {
+                            this.showToast('Warning', `Image ${file.name} exceeds 5MB and was skipped`, 'warning');
+                            resolve(null);
+                            return;
+                        }
+                        
+                        const reader = new FileReader();
+                        reader.onload = async function(e) {
+                            let base64 = e.target.result;
+                            base64 = await Utils.compressImage(base64, 800, 800, 0.7);
+                            resolve(base64);
+                        };
+                        reader.onerror = function(e) {
+                            console.error('Error converting image:', e);
+                            reject(null);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                },
 
-    // ========== EXISTING UTILITIES (keep these as they are) ==========
-    
-    sanitizeHTML: function(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    },
+                convertMultipleImagesToBase64: async function(files, maxPhotos = 5) {
+                    const base64Images = [];
+                    const limitedFiles = files.slice(0, maxPhotos);
+                    
+                    if (files.length > maxPhotos) {
+                        this.showToast('Warning', `Only ${maxPhotos} photos will be saved. ${files.length - maxPhotos} were skipped.`, 'warning');
+                    }
+                    
+                    for (const file of limitedFiles) {
+                        if (file && file.type.startsWith('image/')) {
+                            const base64 = await this.convertImageToBase64(file);
+                            if (base64) base64Images.push(base64);
+                        }
+                    }
+                    return base64Images;
+                },
 
-    formatDate: function(dateString) {
-        if (!dateString) return 'Not specified';
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return 'Invalid date';
-            return date.toLocaleDateString('en-AU', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        } catch (e) {
-            return dateString;
-        }
-    },
+                importData: function(jsonData) {
+                    try {
+                        const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+                        
+                        if (!data || typeof data !== 'object') {
+                            throw new Error('Invalid data format');
+                        }
+                        
+                        let importCount = 0;
+                        
+                        if (data.assessments && Array.isArray(data.assessments)) {
+                            db.assessments = data.assessments;
+                            importCount += data.assessments.length;
+                        }
+                        if (data.species && Array.isArray(data.species)) {
+                            db.species = data.species;
+                            importCount += data.species.length;
+                        }
+                        if (data.activities && Array.isArray(data.activities)) {
+                            db.activities = data.activities;
+                            importCount += data.activities.length;
+                        }
+                        if (data.monitoring && Array.isArray(data.monitoring)) {
+                            db.monitoring = data.monitoring;
+                            importCount += data.monitoring.length;
+                        }
+                        if (data.reports && Array.isArray(data.reports)) {
+                            db.reports = data.reports;
+                            importCount += data.reports.length;
+                        }
+                        if (data.faunaSightings && Array.isArray(data.faunaSightings)) {
+                            db.faunaSightings = data.faunaSightings;
+                            importCount += data.faunaSightings.length;
+                        }
+                        if (data.vegetationSurveys && Array.isArray(data.vegetationSurveys)) {
+                            db.vegetationSurveys = data.vegetationSurveys;
+                            importCount += data.vegetationSurveys.length;
+                        }
+                        if (data.complianceChecklist && Array.isArray(data.complianceChecklist)) {
+                            db.complianceChecklist = data.complianceChecklist;
+                        }
+                        if (data.settings && typeof data.settings === 'object') {
+                            db.settings = data.settings;
+                        }
+                        if (data.sites && Array.isArray(data.sites)) {
+                            db.sites = data.sites;
+                            importCount += data.sites.length;
+                        }
+                        if (data.siteMaps && typeof data.siteMaps === 'object') {
+                            db.siteMaps = data.siteMaps;
+                        }
+                        if (data.mapFeatures && typeof data.mapFeatures === 'object') {
+                            db.mapFeatures = data.mapFeatures;
+                        }
+                        
+                        if (data.currentSiteId && db.sites.some(s => s && s.id === data.currentSiteId)) {
+                            db.currentSiteId = data.currentSiteId;
+                        } else if (db.sites.length > 0) {
+                            db.currentSiteId = db.sites[0].id;
+                        }
+                        
+                        this.showToast('Success', `Imported ${importCount} records successfully!`);
+                        return true;
+                    } catch (e) {
+                        console.error('Import error:', e);
+                        this.showToast('Error', 'Failed to import data - invalid format', 'error');
+                        return false;
+                    }
+                },
 
-    formatDateTime: function(dateTimeString) {
-        if (!dateTimeString) return 'Not specified';
-        try {
-            const date = new Date(dateTimeString);
-            if (isNaN(date.getTime())) return 'Invalid date';
-            return date.toLocaleDateString('en-AU', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch (e) {
-            return dateTimeString;
-        }
-    },
+                sanitizeHTML: function(str) {
+                    if (!str) return '';
+                    const div = document.createElement('div');
+                    div.textContent = str;
+                    return div.innerHTML;
+                },
 
-    capitalize: function(str) {
-        if (!str) return '';
-        return str.charAt(0).toUpperCase() + str.slice(1);
-    },
+                formatDate: function(dateString) {
+                    if (!dateString) return 'Not specified';
+                    try {
+                        const date = new Date(dateString);
+                        if (isNaN(date.getTime())) return 'Invalid date';
+                        return date.toLocaleDateString('en-AU', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                    } catch (e) {
+                        return dateString;
+                    }
+                },
 
-    showToast: function(title, message, type = 'success') {
-        let container = document.getElementById('toastContainer');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toastContainer';
-            container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-            document.body.appendChild(container);
-        }
+                formatDateTime: function(dateTimeString) {
+                    if (!dateTimeString) return 'Not specified';
+                    try {
+                        const date = new Date(dateTimeString);
+                        if (isNaN(date.getTime())) return 'Invalid date';
+                        return date.toLocaleDateString('en-AU', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } catch (e) {
+                        return dateTimeString;
+                    }
+                },
 
-        const toastId = 'toast-' + Date.now();
-        const bgClass = type === 'success' ? 'bg-success' :
-                       type === 'error' ? 'bg-danger' :
-                       type === 'warning' ? 'bg-warning' : 'bg-info';
+                capitalize: function(str) {
+                    if (!str) return '';
+                    return str.charAt(0).toUpperCase() + str.slice(1);
+                },
 
-        const toastHtml = `
-            <div id="${toastId}" class="toast ${bgClass} text-white fade show" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="toast-header ${bgClass} text-white">
-                    <strong class="me-auto">${this.sanitizeHTML(title)}</strong>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-                <div class="toast-body">
-                    ${this.sanitizeHTML(message)}
-                </div>
-            </div>
-        `;
+                showToast: function(title, message, type = 'success') {
+                    let container = document.getElementById('toastContainer');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'toastContainer';
+                        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                        document.body.appendChild(container);
+                    }
 
-        container.insertAdjacentHTML('beforeend', toastHtml);
-        
-        const toastElement = document.getElementById(toastId);
-        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
-            const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
-            toast.show();
-            toastElement.addEventListener('hidden.bs.toast', function() { this.remove(); });
-        }
-    },
+                    const toastId = 'toast-' + Date.now();
+                    const bgClass = type === 'success' ? 'bg-success' :
+                                   type === 'error' ? 'bg-danger' :
+                                   type === 'warning' ? 'bg-warning' : 'bg-info';
 
-    showConfirmation: function(title, message, onConfirm) {
-        let modalElement = document.getElementById('modalConfirm');
-        if (!modalElement) {
-            const modalHtml = `
-                <div class="modal fade" id="modalConfirm" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="modalConfirmLabel">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>Confirm
-                                </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    const toastHtml = `
+                        <div id="${toastId}" class="toast ${bgClass} text-white fade show" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="toast-header ${bgClass} text-white">
+                                <strong class="me-auto">${this.sanitizeHTML(title)}</strong>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body" id="confirmModalBody"></div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
+                            <div class="toast-body">
+                                ${this.sanitizeHTML(message)}
                             </div>
                         </div>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            modalElement = document.getElementById('modalConfirm');
-        }
-        
-        const modal = new bootstrap.Modal(modalElement);
-        const confirmBody = document.getElementById('confirmModalBody');
-        const confirmLabel = document.getElementById('modalConfirmLabel');
-        
-        if (confirmBody) confirmBody.innerHTML = this.sanitizeHTML(message);
-        if (confirmLabel) confirmLabel.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${this.sanitizeHTML(title)}`;
-        
-        const confirmBtn = document.getElementById('confirmActionBtn');
-        if (!confirmBtn) return;
-        
-        const newBtn = confirmBtn.cloneNode(true);
-        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-        newBtn.id = 'confirmActionBtn';
-        
-        newBtn.addEventListener('click', function() {
-            onConfirm();
-            modal.hide();
-        });
-        
-        modal.show();
-    },
+                    `;
 
-    generateId: function() {
-        return Date.now() + Math.floor(Math.random() * 1000);
-    },
-
-    filterByCurrentSite: function(data) {
-        if (!db.currentSiteId || !data) return [];
-        return data.filter(item => item && item.siteId === db.currentSiteId);
-    },
-
-    getCurrentSite: function() {
-        return db.sites.find(site => site && site.id === db.currentSiteId);
-    },
-
-    generateSiteLocation: function(siteId) {
-        const baseLat = -33.4000;
-        const baseLng = 150.3000;
-        
-        const idNum = typeof siteId === 'number' ? siteId : 
-                     (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
-        
-        const latOffset = (idNum % 10) * 0.05;
-        const lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
-        
-        return {
-            center: [baseLat + latOffset, baseLng + lngOffset],
-            zones: [
-                {
-                    name: 'Zone 1 - Native Forest',
-                    coords: [
-                        [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
-                        [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                        [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                        [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
-                    ],
-                    color: '#3498db'
+                    container.insertAdjacentHTML('beforeend', toastHtml);
+                    
+                    const toastElement = document.getElementById(toastId);
+                    if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                        const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+                        toast.show();
+                        toastElement.addEventListener('hidden.bs.toast', function() { this.remove(); });
+                    }
                 },
-                {
-                    name: 'Zone 2 - Wetland Area',
-                    coords: [
-                        [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
-                        [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
-                        [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
-                        [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
-                    ],
-                    color: '#27ae60'
-                },
-                {
-                    name: 'Zone 3 - Weed Control Area',
-                    coords: [
-                        [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
-                        [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
-                        [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
-                        [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
-                    ],
-                    color: '#e74c3c'
-                }
-            ],
-            vegetationMarkers: [
-                { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
-                { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
-                { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
-            ],
-            weedMarkers: [
-                { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
-                { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
-                { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
-            ]
-        };
-    },
 
-    getSiteHealthData: function(siteId) {
-        if (!siteId) return this.getDefaultHealthData();
-        
-        const siteAssessments = db.assessments.filter(a => a && a.siteId === siteId);
-        
-        let healthData = {
-            biodiversity: 78,
-            nativeCover: 65,
-            weedPressure: 22,
-            erosion: 15,
-            faunaActivity: 70,
-            waterQuality: 85,
-            previousBiodiversity: 72,
-            previousNativeCover: 60,
-            previousWeedPressure: 28,
-            previousErosion: 18,
-            previousFaunaActivity: 65,
-            previousWaterQuality: 80
-        };
-        
-        if (siteAssessments.length > 0) {
-            const sorted = [...siteAssessments].sort((a, b) => new Date(b.date) - new Date(a.date));
-            const latest = sorted[0];
-            const previous = sorted[1] || sorted[0];
-            
-            const healthScore = (health) => {
-                switch(health) {
-                    case 'excellent': return 90;
-                    case 'good': return 75;
-                    case 'fair': return 55;
-                    case 'poor': return 30;
-                    case 'degraded': return 15;
-                    default: return 50;
+                showConfirmation: function(title, message, onConfirm) {
+                    let modalElement = document.getElementById('modalConfirm');
+                    if (!modalElement) {
+                        const modalHtml = `
+                            <div class="modal fade" id="modalConfirm" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="modalConfirmLabel">
+                                                <i class="bi bi-exclamation-triangle me-2"></i>Confirm
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body" id="confirmModalBody"></div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        document.body.insertAdjacentHTML('beforeend', modalHtml);
+                        modalElement = document.getElementById('modalConfirm');
+                    }
+                    
+                    const modal = new bootstrap.Modal(modalElement);
+                    const confirmBody = document.getElementById('confirmModalBody');
+                    const confirmLabel = document.getElementById('modalConfirmLabel');
+                    
+                    if (confirmBody) confirmBody.innerHTML = this.sanitizeHTML(message);
+                    if (confirmLabel) confirmLabel.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${this.sanitizeHTML(title)}`;
+                    
+                    const confirmBtn = document.getElementById('confirmActionBtn');
+                    if (!confirmBtn) return;
+                    
+                    const newBtn = confirmBtn.cloneNode(true);
+                    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+                    newBtn.id = 'confirmActionBtn';
+                    
+                    newBtn.addEventListener('click', function() {
+                        onConfirm();
+                        modal.hide();
+                    });
+                    
+                    modal.show();
+                },
+
+                generateId: function() {
+                    return Date.now() + Math.floor(Math.random() * 1000);
+                },
+
+                filterByCurrentSite: function(data) {
+                    if (!db.currentSiteId || !data) return [];
+                    return data.filter(item => item && item.siteId === db.currentSiteId);
+                },
+
+                getCurrentSite: function() {
+                    return db.sites.find(site => site && site.id === db.currentSiteId);
+                },
+
+                generateSiteLocation: function(siteId) {
+                    const baseLat = -33.4000;
+                    const baseLng = 150.3000;
+                    
+                    const idNum = typeof siteId === 'number' ? siteId : 
+                                 (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
+                    
+                    const latOffset = (idNum % 10) * 0.05;
+                    const lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
+                    
+                    return {
+                        center: [baseLat + latOffset, baseLng + lngOffset],
+                        zones: [
+                            {
+                                name: 'Zone 1 - Native Forest',
+                                coords: [
+                                    [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                                    [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
+                                    [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
+                                ],
+                                color: '#3498db'
+                            },
+                            {
+                                name: 'Zone 2 - Wetland Area',
+                                coords: [
+                                    [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
+                                    [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
+                                    [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
+                                    [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
+                                ],
+                                color: '#27ae60'
+                            },
+                            {
+                                name: 'Zone 3 - Weed Control Area',
+                                coords: [
+                                    [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
+                                    [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
+                                    [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
+                                ],
+                                color: '#e74c3c'
+                            }
+                        ],
+                        vegetationMarkers: [
+                            { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
+                            { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
+                            { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
+                        ],
+                        weedMarkers: [
+                            { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
+                            { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
+                            { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
+                        ]
+                    };
+                },
+
+                getSiteHealthData: function(siteId) {
+                    if (!siteId) return this.getDefaultHealthData();
+                    
+                    const siteAssessments = db.assessments.filter(a => a && a.siteId === siteId);
+                    
+                    let healthData = {
+                        biodiversity: 78,
+                        nativeCover: 65,
+                        weedPressure: 22,
+                        erosion: 15,
+                        faunaActivity: 70,
+                        waterQuality: 85,
+                        previousBiodiversity: 72,
+                        previousNativeCover: 60,
+                        previousWeedPressure: 28,
+                        previousErosion: 18,
+                        previousFaunaActivity: 65,
+                        previousWaterQuality: 80
+                    };
+                    
+                    if (siteAssessments.length > 0) {
+                        const sorted = [...siteAssessments].sort((a, b) => new Date(b.date) - new Date(a.date));
+                        const latest = sorted[0];
+                        const previous = sorted[1] || sorted[0];
+                        
+                        const healthScore = (health) => {
+                            switch(health) {
+                                case 'excellent': return 90;
+                                case 'good': return 75;
+                                case 'fair': return 55;
+                                case 'poor': return 30;
+                                case 'degraded': return 15;
+                                default: return 50;
+                            }
+                        };
+                        
+                        const latestScore = healthScore(latest.health);
+                        const previousScore = healthScore(previous.health);
+                        
+                        healthData = {
+                            biodiversity: latestScore,
+                            nativeCover: latestScore - (latest.threats && latest.threats.includes('weeds') ? 10 : 0),
+                            weedPressure: 100 - latestScore + (latest.threats && latest.threats.includes('weeds') ? 20 : 10),
+                            erosion: latest.threats && latest.threats.includes('erosion') ? 40 : 15,
+                            faunaActivity: latestScore - 5,
+                            waterQuality: latest.components && latest.components.includes('water') ? latestScore : 70,
+                            previousBiodiversity: previousScore,
+                            previousNativeCover: previousScore - (previous.threats && previous.threats.includes('weeds') ? 10 : 0),
+                            previousWeedPressure: 100 - previousScore + (previous.threats && previous.threats.includes('weeds') ? 20 : 10),
+                            previousErosion: previous.threats && previous.threats.includes('erosion') ? 40 : 15,
+                            previousFaunaActivity: previousScore - 5,
+                            previousWaterQuality: previous.components && previous.components.includes('water') ? previousScore : 70
+                        };
+                        
+                        Object.keys(healthData).forEach(key => {
+                            healthData[key] = Math.min(100, Math.max(0, healthData[key]));
+                        });
+                    }
+                    
+                    return healthData;
+                },
+
+                getDefaultHealthData: function() {
+                    return {
+                        biodiversity: 78,
+                        nativeCover: 65,
+                        weedPressure: 22,
+                        erosion: 15,
+                        faunaActivity: 70,
+                        waterQuality: 85,
+                        previousBiodiversity: 72,
+                        previousNativeCover: 60,
+                        previousWeedPressure: 28,
+                        previousErosion: 18,
+                        previousFaunaActivity: 65,
+                        previousWaterQuality: 80
+                    };
                 }
             };
-            
-            const latestScore = healthScore(latest.health);
-            const previousScore = healthScore(previous.health);
-            
-            healthData = {
-                biodiversity: latestScore,
-                nativeCover: latestScore - (latest.threats && latest.threats.includes('weeds') ? 10 : 0),
-                weedPressure: 100 - latestScore + (latest.threats && latest.threats.includes('weeds') ? 20 : 10),
-                erosion: latest.threats && latest.threats.includes('erosion') ? 40 : 15,
-                faunaActivity: latestScore - 5,
-                waterQuality: latest.components && latest.components.includes('water') ? latestScore : 70,
-                previousBiodiversity: previousScore,
-                previousNativeCover: previousScore - (previous.threats && previous.threats.includes('weeds') ? 10 : 0),
-                previousWeedPressure: 100 - previousScore + (previous.threats && previous.threats.includes('weeds') ? 20 : 10),
-                previousErosion: previous.threats && previous.threats.includes('erosion') ? 40 : 15,
-                previousFaunaActivity: previousScore - 5,
-                previousWaterQuality: previous.components && previous.components.includes('water') ? previousScore : 70
-            };
-            
-            Object.keys(healthData).forEach(key => {
-                healthData[key] = Math.min(100, Math.max(0, healthData[key]));
-            });
-        }
-        
-        return healthData;
-    },
-
-    getDefaultHealthData: function() {
-        return {
-            biodiversity: 78,
-            nativeCover: 65,
-            weedPressure: 22,
-            erosion: 15,
-            faunaActivity: 70,
-            waterQuality: 85,
-            previousBiodiversity: 72,
-            previousNativeCover: 60,
-            previousWeedPressure: 28,
-            previousErosion: 18,
-            previousFaunaActivity: 65,
-            previousWaterQuality: 80
-        };
-    }
-};
 
             // ==================== MAP EDITING FUNCTIONS ====================
             const MapEditor = {
@@ -3589,7 +3576,6 @@ const Utils = {
                         return;
                     }
 
-                    // Check if Leaflet Geoman is available
                     if (window.map.pm) {
                         try {
                             window.map.pm.addControls({
@@ -3605,24 +3591,20 @@ const Utils = {
                                 removalMode: true
                             });
 
-                            // Set initial options
                             window.map.pm.setLang('en');
                             window.map.pm.setGlobalOptions({
                                 snappable: false,
                                 allowSelfIntersection: false
                             });
 
-                            // Listen for created events
                             window.map.on('pm:create', (e) => {
                                 this.onFeatureCreated(e);
                             });
 
-                            // Listen for edit events
                             window.map.on('pm:edit', (e) => {
                                 this.onFeatureEdited(e);
                             });
 
-                            // Listen for remove events
                             window.map.on('pm:remove', (e) => {
                                 this.onFeatureRemoved(e);
                             });
@@ -3633,9 +3615,7 @@ const Utils = {
                         console.warn('Leaflet Geoman not available - map editing disabled');
                     }
 
-                    // Load existing features for current site
                     this.loadFeaturesForCurrentSite();
-
                     console.log('Map editing initialized');
                 },
 
@@ -3644,7 +3624,6 @@ const Utils = {
 
                     const siteFeatures = db.mapFeatures[db.currentSiteId] || { zones: [], vegetation: [], weeds: [], points: [] };
 
-                    // Clear existing custom layers
                     if (window.customZonesLayer) window.map.removeLayer(window.customZonesLayer);
                     if (window.customVegetationLayer) window.map.removeLayer(window.customVegetationLayer);
                     if (window.customWeedsLayer) window.map.removeLayer(window.customWeedsLayer);
@@ -3655,7 +3634,6 @@ const Utils = {
                     window.customWeedsLayer = L.layerGroup();
                     window.customPointsLayer = L.layerGroup();
 
-                    // Add zones
                     siteFeatures.zones.forEach(feature => {
                         if (feature && feature.type === 'polygon' && feature.coordinates) {
                             try {
@@ -3675,7 +3653,6 @@ const Utils = {
                         }
                     });
 
-                    // Add vegetation markers
                     siteFeatures.vegetation.forEach(feature => {
                         if (feature && feature.coordinates) {
                             try {
@@ -3697,7 +3674,6 @@ const Utils = {
                         }
                     });
 
-                    // Add weed markers
                     siteFeatures.weeds.forEach(feature => {
                         if (feature && feature.coordinates) {
                             try {
@@ -3719,7 +3695,6 @@ const Utils = {
                         }
                     });
 
-                    // Add points of interest
                     siteFeatures.points.forEach(feature => {
                         if (feature && feature.coordinates) {
                             try {
@@ -3741,7 +3716,6 @@ const Utils = {
                         }
                     });
 
-                    // Add layers to map based on toggle states
                     const zoneToggle = document.getElementById('zoneToggle');
                     const vegToggle = document.getElementById('vegetationToggle');
                     const weedsToggle = document.getElementById('weedsToggle');
@@ -3781,7 +3755,6 @@ const Utils = {
 
                 onFeatureCreated: function(e) {
                     if (!db.editMode) {
-                        // If not in edit mode, remove the created feature
                         if (window.map && window.map.pm) {
                             window.map.pm.removeLayer(e.layer);
                         }
@@ -3792,7 +3765,6 @@ const Utils = {
                     const layer = e.layer;
                     const shape = e.shape;
 
-                    // Determine feature type
                     let featureType = 'point';
                     if (shape === 'Polygon' || shape === 'Rectangle' || shape === 'Circle') {
                         featureType = 'polygon';
@@ -3802,7 +3774,6 @@ const Utils = {
                         featureType = 'point';
                     }
 
-                    // Get coordinates
                     let coordinates;
                     try {
                         if (featureType === 'polygon') {
@@ -3814,7 +3785,6 @@ const Utils = {
                             coordinates = [latlng.lat, latlng.lng];
                         }
 
-                        // Store feature data temporarily
                         layer.featureData = {
                             id: Utils.generateId(),
                             type: featureType,
@@ -3827,7 +3797,6 @@ const Utils = {
                             createdAt: new Date().toISOString()
                         };
 
-                        // Open modal to edit feature details
                         this.showAddFeatureModal(layer);
                     } catch (e) {
                         console.error('Error creating feature:', e);
@@ -3841,7 +3810,6 @@ const Utils = {
                     const layer = e.layer;
                     if (layer && layer.featureData) {
                         try {
-                            // Update coordinates based on new shape
                             if (layer.featureData.type === 'polygon') {
                                 layer.featureData.coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
                             } else if (layer.featureData.type === 'line') {
@@ -3875,15 +3843,12 @@ const Utils = {
                     }
 
                     try {
-                        // Clear form
                         const form = document.getElementById('formAddMapFeature');
                         if (form) form.reset();
                         
-                        // Set feature type
                         const featureType = document.getElementById('featureType');
                         if (featureType) featureType.value = layer.featureData.type;
                         
-                        // Set coordinates
                         if (layer.featureData.type === 'polygon' || layer.featureData.type === 'line') {
                             const coordInput = document.getElementById('featureCoordinates');
                             if (coordInput) coordInput.value = JSON.stringify(layer.featureData.coordinates);
@@ -3894,15 +3859,9 @@ const Utils = {
                             if (lngInput) lngInput.value = layer.featureData.coordinates[1];
                         }
 
-                        // Populate species dropdown
                         this.populateSpeciesDropdown('featureSpecies');
-
-                        // Set up color picker
                         this.setupColorPicker('colorPickerContainer', 'featureColor');
-
-                        // Store layer reference
                         modal.currentLayer = layer;
-
                         new bootstrap.Modal(modal).show();
                     } catch (e) {
                         console.error('Error showing add feature modal:', e);
@@ -3920,7 +3879,6 @@ const Utils = {
                     }
 
                     try {
-                        // Fill form
                         const idInput = document.getElementById('editFeatureId');
                         const layerIdInput = document.getElementById('editFeatureLayerId');
                         const nameInput = document.getElementById('editFeatureName');
@@ -3935,15 +3893,9 @@ const Utils = {
                         if (descriptionInput) descriptionInput.value = feature.description || '';
                         if (colorInput) colorInput.value = feature.color || '#3498db';
 
-                        // Populate species dropdown
                         this.populateSpeciesDropdown('editFeatureSpecies', feature.speciesId);
-
-                        // Set up color picker
                         this.setupColorPicker('editColorPickerContainer', 'editFeatureColor', feature.color);
-
-                        // Store feature reference
                         modal.currentFeature = feature;
-
                         new bootstrap.Modal(modal).show();
                     } catch (e) {
                         console.error('Error showing edit feature modal:', e);
@@ -3975,10 +3927,8 @@ const Utils = {
                     
                     if (!container || !input) return;
 
-                    // Set default
                     input.value = defaultColor;
 
-                    // Add click handlers to color pickers
                     container.querySelectorAll('.color-picker').forEach(picker => {
                         picker.classList.remove('selected');
                         if (picker.dataset.color === defaultColor) {
@@ -4010,7 +3960,6 @@ const Utils = {
                         const speciesId = document.getElementById('featureSpecies').value || null;
                         const featureType = document.getElementById('featureType').value;
 
-                        // Get coordinates
                         let coordinates;
                         if (featureType === 'polygon' || featureType === 'line') {
                             coordinates = JSON.parse(document.getElementById('featureCoordinates').value);
@@ -4020,7 +3969,6 @@ const Utils = {
                             coordinates = [lat, lng];
                         }
 
-                        // Create feature object
                         const feature = {
                             id: Utils.generateId(),
                             siteId: db.currentSiteId,
@@ -4034,12 +3982,10 @@ const Utils = {
                             createdAt: new Date().toISOString()
                         };
 
-                        // Store in database
                         if (!db.mapFeatures[db.currentSiteId]) {
                             db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
                         }
 
-                        // Add to appropriate category
                         if (category === 'zone') {
                             db.mapFeatures[db.currentSiteId].zones.push(feature);
                         } else if (category === 'vegetation') {
@@ -4050,17 +3996,13 @@ const Utils = {
                             db.mapFeatures[db.currentSiteId].points.push(feature);
                         }
 
-                        // Update the layer with feature data
                         const modal = document.getElementById('modalAddMapFeature');
                         if (modal && modal.currentLayer) {
                             modal.currentLayer.featureData = feature;
-                            
-                            // Update popup
                             modal.currentLayer.unbindPopup();
                             modal.currentLayer.bindPopup(this.createFeaturePopup(feature));
                         }
 
-                        // Save to storage
                         if (Utils.saveData()) {
                             if (modal) bootstrap.Modal.getInstance(modal).hide();
                             Utils.showToast('Success', 'Feature added to map');
@@ -4087,7 +4029,6 @@ const Utils = {
                         
                         if (!feature) return;
 
-                        // Update properties
                         feature.name = document.getElementById('editFeatureName').value;
                         feature.category = document.getElementById('editFeatureCategory').value;
                         feature.description = document.getElementById('editFeatureDescription').value;
@@ -4095,10 +4036,8 @@ const Utils = {
                         feature.speciesId = document.getElementById('editFeatureSpecies').value || null;
                         feature.updatedAt = new Date().toISOString();
 
-                        // Find and update the layer
                         this.updateLayerForFeature(feature);
 
-                        // Save to storage
                         if (Utils.saveData()) {
                             bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
                             Utils.showToast('Success', 'Feature updated');
@@ -4119,10 +4058,7 @@ const Utils = {
                         () => {
                             try {
                                 this.removeFeatureFromStorage(featureId);
-                                
-                                // Find and remove the layer
                                 this.removeLayerForFeature(featureId);
-                                
                                 bootstrap.Modal.getInstance(document.getElementById('modalEditMapFeature')).hide();
                                 Utils.showToast('Success', 'Feature deleted');
                                 this.updateMapFeaturesCount();
@@ -4229,12 +4165,8 @@ const Utils = {
                         'Are you sure you want to clear all custom map features? This cannot be undone.',
                         () => {
                             if (db.currentSiteId) {
-                                // Clear features for current site
                                 db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
-                                
-                                // Reload features (which will clear layers)
                                 this.loadFeaturesForCurrentSite();
-                                
                                 Utils.saveData();
                                 Utils.showToast('Success', 'Map cleared');
                             }
@@ -4263,7 +4195,6 @@ const Utils = {
                         db.currentSiteId = db.sites[0].id;
                     }
                     
-                    // Ensure each site has map data
                     db.sites.forEach(site => {
                         if (site) {
                             if (!db.siteMaps[site.id]) {
@@ -4548,30 +4479,22 @@ const Utils = {
                 },
 
                 switchSite: function(siteId) {
-                    // Save current site data
                     Utils.saveData();
-                    
-                    // Update current site
                     db.currentSiteId = siteId;
-                    
-                    // Update UI
                     this.loadSiteSelector();
                     App.populateModalSiteIds();
                     
-                    // Force chart update first
                     setTimeout(() => {
                         App.updateHealthChart();
                     }, 100);
                     
-                    // Then load all data
                     setTimeout(() => {
                         App.loadAllData();
                     }, 200);
                     
-                    // Update map
                     setTimeout(() => {
                         if (window.map) {
-                            App.initMap(); // Reinitialize map completely
+                            App.initMap();
                         } else {
                             App.initMap();
                         }
@@ -4587,17 +4510,14 @@ const Utils = {
             // ==================== CORE APP FUNCTIONS ====================
             const App = {
                 init: function() {
-                    // Check dependencies first
                     if (!checkDependencies()) {
                         console.warn('Application running with missing dependencies');
                     }
                     
                     Utils.loadData();
                     SiteManager.initSites();
-                    
                     this.loadInitialData();
                     
-                    // Initialize components with proper timing
                     setTimeout(() => {
                         this.initCharts();
                         this.initCalendar();
@@ -4606,7 +4526,6 @@ const Utils = {
                         this.setupEventListeners();
                         this.updateStorageInfo();
                         
-                        // Initialize map after everything else
                         setTimeout(() => {
                             this.initMap();
                         }, 500);
@@ -4651,13 +4570,11 @@ const Utils = {
                         }
                     }
                     
-                    // Force chart update after data loads
                     setTimeout(() => {
                         this.updateHealthChart();
                     }, 150);
                     
                     if (window.map) {
-                        // Reinitialize map for new site
                         this.initMap();
                     }
                 },
@@ -4669,7 +4586,6 @@ const Utils = {
                     const healthData = Utils.getSiteHealthData(db.currentSiteId);
                     const siteName = Utils.getCurrentSite()?.name || 'this site';
                     
-                    // Destroy existing chart if it exists
                     if (window.healthChart) {
                         try {
                             window.healthChart.destroy();
@@ -4679,10 +4595,8 @@ const Utils = {
                         window.healthChart = null;
                     }
                     
-                    // Get canvas context
                     const ctx = canvas.getContext('2d');
                     
-                    // Create new chart
                     try {
                         if (typeof Chart === 'undefined') {
                             console.error('Chart.js not loaded');
@@ -4769,54 +4683,48 @@ const Utils = {
                     }
                 },
 
-importDataFromFile: function() {
-    // Create file input dynamically
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.json';
-    fileInput.style.display = 'none';
-    
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        try {
-            const text = await file.text();
-            Utils.showToast('Info', 'Importing data...', 'info');
-            
-            if (Utils.importData(text)) {
-                Utils.saveData();
-                
-                // Refresh all UI components
-                SiteManager.loadSiteSelector();
-                this.loadAllData();
-                
-                // Refresh map if on dashboard
-                if (window.map) {
-                    this.initMap();
-                }
-                
-                // Refresh calendar
-                if (window.calendar) {
-                    try {
-                        window.calendar.refetchEvents();
-                    } catch (e) {
-                        console.error('Calendar refresh error:', e);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Import error:', error);
-            Utils.showToast('Error', 'Failed to read file', 'error');
-        }
-        
-        document.body.removeChild(fileInput);
-    });
-    
-    document.body.appendChild(fileInput);
-    fileInput.click();
-},
-
+                importDataFromFile: function() {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.json';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.addEventListener('change', async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        
+                        try {
+                            const text = await file.text();
+                            Utils.showToast('Info', 'Importing data...', 'info');
+                            
+                            if (Utils.importData(text)) {
+                                Utils.saveData();
+                                SiteManager.loadSiteSelector();
+                                this.loadAllData();
+                                
+                                if (window.map) {
+                                    this.initMap();
+                                }
+                                
+                                if (window.calendar) {
+                                    try {
+                                        window.calendar.refetchEvents();
+                                    } catch (e) {
+                                        console.error('Calendar refresh error:', e);
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Import error:', error);
+                            Utils.showToast('Error', 'Failed to read file', 'error');
+                        }
+                        
+                        document.body.removeChild(fileInput);
+                    });
+                    
+                    document.body.appendChild(fileInput);
+                    fileInput.click();
+                },
 
                 loadInitialData: function() {
                     const siteId = db.currentSiteId || (db.sites.length > 0 ? db.sites[0].id : null);
@@ -5051,7 +4959,6 @@ importDataFromFile: function() {
                 },
 
                 initCharts: function() {
-                    // Initialize health chart
                     this.updateHealthChart();
 
                     try {
@@ -5138,103 +5045,65 @@ importDataFromFile: function() {
                 },
 
                 initMap: function() {
-                    console.log('Initializing map...');
+                    console.log('Starting map initialization...');
                     
                     const mapContainer = document.getElementById('map');
                     if (!mapContainer) {
-                        console.error('Map element not found');
+                        console.error('Map container not found');
                         return;
                     }
-
-                    const siteId = db.currentSiteId;
+                    
                     const site = Utils.getCurrentSite();
-                    
                     if (!site) {
-                        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
+                        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected</div>';
                         return;
                     }
                     
-                    let mapData = db.siteMaps[siteId];
+                    let mapData = db.siteMaps[db.currentSiteId];
                     if (!mapData) {
-                        mapData = Utils.generateSiteLocation(siteId);
-                        db.siteMaps[siteId] = mapData;
-                        Utils.saveData();
+                        mapData = Utils.generateSiteLocation(db.currentSiteId);
+                        db.siteMaps[db.currentSiteId] = mapData;
+                    }
+                    
+                    if (window.map) {
+                        try { window.map.remove(); } catch(e) {}
+                        window.map = null;
                     }
                     
                     try {
-                        // Clean up existing map
-                        if (window.map) {
-                            window.map.remove();
-                            window.map = null;
-                        }
-                        
-                        // Ensure container has proper dimensions
                         mapContainer.style.height = '500px';
-                        mapContainer.style.width = '100%';
-                        
-                        // Clear any existing content
                         mapContainer.innerHTML = '';
                         
-                        // Check if Leaflet is available
-                        if (typeof L === 'undefined') {
-                            mapContainer.innerHTML = '<div class="alert alert-warning">Leaflet library not loaded.</div>';
-                            return;
-                        }
+                        window.map = L.map('map').setView(mapData.center, 13);
                         
-                        // Create new map
-                        window.map = L.map('map', {
-                            center: mapData.center,
-                            zoom: 13,
-                            zoomControl: true,
-                            fadeAnimation: false,
-                            zoomAnimation: false
-                        });
-
-                        // Add tile layer with error handling
                         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                            maxZoom: 19,
-                            detectRetina: true
+                            attribution: '&copy; OpenStreetMap'
                         }).addTo(window.map);
-
-                        // Add main site marker
-                        L.marker(mapData.center).addTo(window.map)
-                            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
-                            .openPopup();
-
-                        // Create layers
+                        
+                        L.marker(mapData.center).bindPopup(`<b>${site.name}</b>`).addTo(window.map);
+                        
                         this.createMapLayers(mapData);
                         
-                        // Initialize editing tools
-                        MapEditor.initEditing();
-                        
-                        // Force map to recalculate size
                         setTimeout(() => {
-                            if (window.map) {
-                                window.map.invalidateSize(true);
-                                console.log('Map size invalidated');
-                            }
-                        }, 250);
+                            if (window.map) window.map.invalidateSize();
+                        }, 200);
                         
-                        // Additional resize on window resize
-                        window.addEventListener('resize', () => {
-                            if (window.map) {
-                                window.map.invalidateSize(true);
-                            }
-                        });
+                        // Initialize editing after map is ready
+                        setTimeout(() => {
+                            MapEditor.initEditing();
+                        }, 300);
                         
-                        console.log('Map initialized successfully');
+                        console.log('Map loaded successfully');
                         
-                    } catch (error) {
-                        console.error('Error initializing map:', error);
-                        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please check your internet connection.</div>';
+                    } catch(error) {
+                        console.error('Map error:', error);
+                        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load</div>';
                     }
                 },
 
                 createMapLayers: function(mapData) {
                     if (!mapData) return;
                     
-                    // Clear existing layers
                     if (window.zonesLayer) window.zonesLayer.clearLayers();
                     if (window.vegetationLayer) window.vegetationLayer.clearLayers();
                     if (window.weedsLayer) window.weedsLayer.clearLayers();
@@ -5243,7 +5112,6 @@ importDataFromFile: function() {
                     window.vegetationLayer = L.layerGroup();
                     window.weedsLayer = L.layerGroup();
                     
-                    // Add zones
                     if (mapData.zones) {
                         mapData.zones.forEach(zone => {
                             if (zone && zone.coords) {
@@ -5262,7 +5130,6 @@ importDataFromFile: function() {
                         });
                     }
                     
-                    // Add vegetation markers
                     if (mapData.vegetationMarkers) {
                         mapData.vegetationMarkers.forEach(markerData => {
                             if (markerData && markerData.coords) {
@@ -5281,7 +5148,6 @@ importDataFromFile: function() {
                         });
                     }
                     
-                    // Add weed markers
                     if (mapData.weedMarkers) {
                         mapData.weedMarkers.forEach(markerData => {
                             if (markerData && markerData.coords) {
@@ -5300,10 +5166,8 @@ importDataFromFile: function() {
                         });
                     }
 
-                    // Add zones layer by default
                     window.zonesLayer.addTo(window.map);
                     
-                    // Set button states
                     const zoneToggle = document.getElementById('zoneToggle');
                     const vegToggle = document.getElementById('vegetationToggle');
                     const weedsToggle = document.getElementById('weedsToggle');
@@ -5330,54 +5194,51 @@ importDataFromFile: function() {
                     const calendarEl = document.getElementById('calendar');
                     if (!calendarEl) return;
 
-                    try {
-                        if (typeof FullCalendar === 'undefined') {
-                            calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
-                            return;
-                        }
-
-                        const events = Utils.filterByCurrentSite(db.activities).map(activity => {
-                            if (!activity) return null;
-                            return {
-                                id: activity.id.toString(),
-                                title: activity.title,
-                                start: activity.startDate,
-                                end: activity.endDate || activity.startDate,
-                                extendedProps: {
-                                    type: activity.type,
-                                    location: activity.location,
-                                    assignedTo: activity.assignedTo,
-                                    status: activity.status
-                                },
-                                backgroundColor: this.getActivityColor(activity.type),
-                                borderColor: this.getActivityColor(activity.type),
-                                textColor: '#fff'
-                            };
-                        }).filter(e => e !== null);
-
-                        window.calendar = new FullCalendar.Calendar(calendarEl, {
-                            initialView: 'dayGridMonth',
-                            headerToolbar: {
-                                left: 'prev,next today',
-                                center: 'title',
-                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                            },
-                            events: events,
-                            eventClick: function(info) {
-                                const activity = db.activities.find(a => a && a.id.toString() === info.event.id);
-                                if (activity) {
-                                    App.showActivityDetails(activity);
-                                }
-                            },
-                            height: 600,
-                            stickyHeaderDates: true
-                        });
-
-                        window.calendar.render();
-                    } catch (error) {
-                        console.error('Error initializing calendar:', error);
+                    if (typeof FullCalendar === 'undefined') {
                         calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded.</div>';
+                        return;
                     }
+
+                    const events = Utils.filterByCurrentSite(db.activities).map(activity => {
+                        if (!activity) return null;
+                        return {
+                            id: activity.id.toString(),
+                            title: activity.title,
+                            start: activity.startDate,
+                            end: activity.endDate || activity.startDate,
+                            extendedProps: {
+                                type: activity.type,
+                                location: activity.location,
+                                assignedTo: activity.assignedTo,
+                                status: activity.status
+                            },
+                            backgroundColor: this.getActivityColor(activity.type),
+                            borderColor: this.getActivityColor(activity.type),
+                            textColor: '#fff'
+                        };
+                    }).filter(e => e !== null);
+
+                    if (window.calendar) {
+                        try { window.calendar.destroy(); } catch(e) {}
+                    }
+
+                    window.calendar = new FullCalendar.Calendar(calendarEl, {
+                        initialView: 'dayGridMonth',
+                        headerToolbar: {
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                        },
+                        events: events,
+                        eventClick: (info) => {
+                            const activity = db.activities.find(a => a && a.id.toString() === info.event.id);
+                            if (activity) this.showActivityDetails(activity);
+                        },
+                        height: 600,
+                        stickyHeaderDates: true
+                    });
+
+                    window.calendar.render();
                 },
 
                 getActivityColor: function(type) {
@@ -5539,7 +5400,7 @@ importDataFromFile: function() {
                                             Create First Assessment
                                         </button>
                                     </div>
-                                </td>
+				</td>
                             </tr>
                         `;
                     } else {
@@ -5634,73 +5495,72 @@ importDataFromFile: function() {
                     new bootstrap.Modal(document.getElementById('modalViewAssessment')).show();
                 },
 
-saveAssessment: async function() {
-    const form = document.getElementById('formNewAssessment');
-    if (!form) return;
-    
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
-        
-        const components = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
-        if (components.length === 0) {
-            const feedback = document.getElementById('componentsFeedback');
-            if (feedback) feedback.style.display = 'block';
-        }
-        return;
-    }
+                saveAssessment: async function() {
+                    const form = document.getElementById('formNewAssessment');
+                    if (!form) return;
+                    
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        
+                        const components = document.querySelectorAll('#formNewAssessment input[name="components"]:checked');
+                        if (components.length === 0) {
+                            const feedback = document.getElementById('componentsFeedback');
+                            if (feedback) feedback.style.display = 'block';
+                        }
+                        return;
+                    }
 
-    const components = Array.from(document.querySelectorAll('#formNewAssessment input[name="components"]:checked'))
-        .map(cb => cb.value);
-    
-    if (components.length === 0) {
-        const feedback = document.getElementById('componentsFeedback');
-        if (feedback) feedback.style.display = 'block';
-        return;
-    }
+                    const components = Array.from(document.querySelectorAll('#formNewAssessment input[name="components"]:checked'))
+                        .map(cb => cb.value);
+                    
+                    if (components.length === 0) {
+                        const feedback = document.getElementById('componentsFeedback');
+                        if (feedback) feedback.style.display = 'block';
+                        return;
+                    }
 
-    const threatsSelect = document.getElementById('modalThreats');
-    const threats = threatsSelect ? Array.from(threatsSelect.selectedOptions).map(opt => opt.value) : [];
+                    const threatsSelect = document.getElementById('modalThreats');
+                    const threats = threatsSelect ? Array.from(threatsSelect.selectedOptions).map(opt => opt.value) : [];
 
-    // Handle photos - convert to Base64 with compression and limit of 5 photos
-    const photoInput = document.getElementById('modalAssessmentPhotos');
-    let photos = [];
-    if (photoInput && photoInput.files && photoInput.files.length > 0) {
-        Utils.showToast('Info', 'Processing images (max 5, auto-compressed)...', 'info');
-        photos = await Utils.convertMultipleImagesToBase64(Array.from(photoInput.files), 5);
-        Utils.showToast('Success', `${photos.length} image(s) saved and compressed`, 'success');
-    }
+                    const photoInput = document.getElementById('modalAssessmentPhotos');
+                    let photos = [];
+                    if (photoInput && photoInput.files && photoInput.files.length > 0) {
+                        Utils.showToast('Info', 'Processing images...', 'info');
+                        photos = await Utils.convertMultipleImagesToBase64(Array.from(photoInput.files), 5);
+                        Utils.showToast('Success', `${photos.length} image(s) saved`, 'success');
+                    }
 
-    const newAssessment = {
-        id: Utils.generateId(),
-        siteId: db.currentSiteId,
-        date: document.getElementById('modalAssessmentDate').value,
-        assessor: document.getElementById('modalAssessorName').value,
-        description: document.getElementById('modalSiteDescription').value,
-        components: components,
-        health: document.getElementById('modalEcosystemHealth').value,
-        threats: threats,
-        photos: photos,
-        createdAt: new Date().toISOString()
-    };
+                    const newAssessment = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        date: document.getElementById('modalAssessmentDate').value,
+                        assessor: document.getElementById('modalAssessorName').value,
+                        description: document.getElementById('modalSiteDescription').value,
+                        components: components,
+                        health: document.getElementById('modalEcosystemHealth').value,
+                        threats: threats,
+                        photos: photos,
+                        createdAt: new Date().toISOString()
+                    };
 
-    db.assessments.push(newAssessment);
-    
-    if (Utils.saveData()) {
-        form.reset();
-        form.classList.remove('was-validated');
-        const feedback = document.getElementById('componentsFeedback');
-        if (feedback) feedback.style.display = 'none';
-        
-        const preview = document.getElementById('assessmentPhotoPreview');
-        if (preview) preview.innerHTML = '';
-        
-        bootstrap.Modal.getInstance(document.getElementById('modalNewAssessment')).hide();
-        Utils.showToast('Success', 'Assessment saved successfully!');
-        
-        this.loadAssessments();
-        this.loadDashboard();
-    }
-},
+                    db.assessments.push(newAssessment);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        const feedback = document.getElementById('componentsFeedback');
+                        if (feedback) feedback.style.display = 'none';
+                        
+                        const preview = document.getElementById('assessmentPhotoPreview');
+                        if (preview) preview.innerHTML = '';
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewAssessment')).hide();
+                        Utils.showToast('Success', 'Assessment saved successfully!');
+                        
+                        this.loadAssessments();
+                        this.loadDashboard();
+                    }
+                },
 
                 loadSpecies: function() {
                     const filteredSpecies = Utils.filterByCurrentSite(db.species);
@@ -5862,63 +5722,62 @@ saveAssessment: async function() {
                         });
                     }
 
-                    // Update feature modals' species dropdowns
                     MapEditor.populateSpeciesDropdown('featureSpecies');
                     MapEditor.populateSpeciesDropdown('editFeatureSpecies');
                 },
 
-saveSpecies: async function() {
-    const form = document.getElementById('formNewSpecies');
-    if (!form) return;
-    
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
-        return;
-    }
+                saveSpecies: async function() {
+                    const form = document.getElementById('formNewSpecies');
+                    if (!form) return;
+                    
+                    if (!form.checkValidity()) {
+                        form.classList.add('was-validated');
+                        return;
+                    }
 
-    let image = '';
-    const fileInput = document.getElementById('speciesImage');
-    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-        Utils.showToast('Info', 'Processing image (auto-compressed)...', 'info');
-        image = await Utils.convertImageToBase64(fileInput.files[0]);
-        if (image) {
-            Utils.showToast('Success', 'Image saved and compressed', 'success');
-        }
-    }
+                    let image = '';
+                    const fileInput = document.getElementById('speciesImage');
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                        Utils.showToast('Info', 'Processing image...', 'info');
+                        image = await Utils.convertImageToBase64(fileInput.files[0]);
+                        if (image) {
+                            Utils.showToast('Success', 'Image saved', 'success');
+                        }
+                    }
 
-    const newSpecies = {
-        id: Utils.generateId(),
-        siteId: db.currentSiteId,
-        scientificName: document.getElementById('speciesScientificName').value,
-        commonName: document.getElementById('speciesCommonName').value || null,
-        type: document.getElementById('speciesType').value,
-        status: document.getElementById('speciesStatus').value,
-        description: document.getElementById('speciesDescription').value,
-        habitat: document.getElementById('speciesHabitat').value || null,
-        lastObserved: document.getElementById('speciesLastObserved').value || null,
-        image: image,
-        notes: document.getElementById('speciesNotes').value,
-        createdAt: new Date().toISOString()
-    };
+                    const newSpecies = {
+                        id: Utils.generateId(),
+                        siteId: db.currentSiteId,
+                        scientificName: document.getElementById('speciesScientificName').value,
+                        commonName: document.getElementById('speciesCommonName').value || null,
+                        type: document.getElementById('speciesType').value,
+                        status: document.getElementById('speciesStatus').value,
+                        description: document.getElementById('speciesDescription').value,
+                        habitat: document.getElementById('speciesHabitat').value || null,
+                        lastObserved: document.getElementById('speciesLastObserved').value || null,
+                        image: image,
+                        notes: document.getElementById('speciesNotes').value,
+                        createdAt: new Date().toISOString()
+                    };
 
-    db.species.push(newSpecies);
-    
-    if (Utils.saveData()) {
-        form.reset();
-        form.classList.remove('was-validated');
-        const preview = document.getElementById('speciesImagePreview');
-        if (preview) {
-            preview.style.display = 'none';
-            preview.src = '#';
-        }
-        
-        bootstrap.Modal.getInstance(document.getElementById('modalNewSpecies')).hide();
-        Utils.showToast('Success', 'Species record saved successfully!');
-        
-        this.loadSpecies();
-        this.loadDashboard();
-    }
-},
+                    db.species.push(newSpecies);
+                    
+                    if (Utils.saveData()) {
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        const preview = document.getElementById('speciesImagePreview');
+                        if (preview) {
+                            preview.style.display = 'none';
+                            preview.src = '#';
+                        }
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('modalNewSpecies')).hide();
+                        Utils.showToast('Success', 'Species record saved successfully!');
+                        
+                        this.loadSpecies();
+                        this.loadDashboard();
+                    }
+                },
 
                 showSpeciesDetails: function(species) {
                     const modalBody = document.getElementById('speciesModalBody');
@@ -6882,18 +6741,22 @@ saveSpecies: async function() {
                                     ` : ''}
                                     
                                     <table>
-                                        <tr>
-                                            <th>Requirement</th>
-                                            <th>Status</th>
-                                            <th>Evidence</th>
-                                        </tr>
-                                        ${report.content.checklist.map(item => `
+                                        <thead>
                                             <tr>
-                                                <td>${item.requirement}</td>
-                                                <td>${item.compliant || 'Not assessed'}</td>
-                                                <td>${item.evidence || 'None'}</td>
+                                                <th>Requirement</th>
+                                                <th>Status</th>
+                                                <th>Evidence</th>
                                             </tr>
-                                        `).join('')}
+                                        </thead>
+                                        <tbody>
+                                            ${report.content.checklist.map(item => `
+                                                <tr>
+                                                    <td>${item.requirement}</td>
+                                                    <td>${item.compliant || 'Not assessed'}</td>
+                                                    <td>${item.evidence || 'None'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
                                     </table>
                                 ` : ''}
                             </body>
@@ -7392,7 +7255,6 @@ saveSpecies: async function() {
                     const generateReportBtn = document.getElementById('generateReportBtn');
                     if (generateReportBtn) generateReportBtn.addEventListener('click', () => this.generateReportFromModal());
 
-                    // Add event listeners for generate report buttons
                     document.querySelectorAll('.generate-report-btn').forEach(btn => {
                         btn.addEventListener('click', (e) => {
                             const type = e.target.dataset.type;
@@ -7464,7 +7326,6 @@ saveSpecies: async function() {
                         generateComplianceReportBtn.addEventListener('click', () => this.generateReport('compliance'));
                     }
 
-                    // Map editing event listeners
                     const editModeBtn = document.getElementById('editModeBtn');
                     if (editModeBtn) {
                         editModeBtn.addEventListener('click', () => MapEditor.toggleEditMode());
@@ -7480,7 +7341,6 @@ saveSpecies: async function() {
                         clearMapBtn.addEventListener('click', () => MapEditor.clearMap());
                     }
 
-                    // Map feature modal buttons
                     const saveMapFeatureBtn = document.getElementById('saveMapFeatureBtn');
                     if (saveMapFeatureBtn) {
                         saveMapFeatureBtn.addEventListener('click', () => MapEditor.saveNewFeature());
@@ -7496,12 +7356,11 @@ saveSpecies: async function() {
                         deleteMapFeatureBtn.addEventListener('click', () => MapEditor.deleteFeature());
                     }
 
-const importDataBtn = document.getElementById('importDataBtn');
-if (importDataBtn) {
-    importDataBtn.addEventListener('click', () => this.importDataFromFile());
-}
+                    const importDataBtn = document.getElementById('importDataBtn');
+                    if (importDataBtn) {
+                        importDataBtn.addEventListener('click', () => this.importDataFromFile());
+                    }
 
-                    // Delegate click events for feature edit buttons
                     document.addEventListener('click', (e) => {
                         if (e.target.closest('.edit-feature')) {
                             const featureId = parseInt(e.target.closest('.edit-feature').dataset.id);
@@ -7515,11 +7374,16 @@ if (importDataBtn) {
                             
                             if (target === '#dashboard') {
                                 this.loadDashboard();
+                                setTimeout(() => {
+                                    if (window.map) window.map.invalidateSize();
+                                }, 300);
                             } else if (target === '#site-assessment') {
                                 this.loadAssessments();
                             } else if (target === '#maintenance-plan') {
                                 this.loadActivities();
-                                if (window.calendar) try { window.calendar.refetchEvents(); } catch (e) { console.error(e); }
+                                if (window.calendar) {
+                                    setTimeout(() => window.calendar.updateSize(), 200);
+                                }
                             } else if (target === '#species-register') {
                                 this.loadSpecies();
                             } else if (target === '#monitoring') {
@@ -7530,13 +7394,6 @@ if (importDataBtn) {
                                 this.loadComplianceChecklist();
                             } else if (target === '#settings') {
                                 this.loadSettings();
-                            }
-
-                            // Refresh map when dashboard tab is shown
-                            if (target === '#dashboard' && window.map) {
-                                setTimeout(() => {
-                                    window.map.invalidateSize(true);
-                                }, 300);
                             }
                         });
                     });
@@ -7689,7 +7546,6 @@ if (importDataBtn) {
                 App.init();
             });
 
-            // Expose global functions for onclick handlers
             window.generateReport = function(type) {
                 App.generateReport(type);
             };
@@ -7697,4 +7553,6 @@ if (importDataBtn) {
         })();
     </script>
 </body>
+</html>
+</body> 
 </html>
