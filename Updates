@@ -1,29 +1,17 @@
-You're absolutely right, and I apologize for not looking more carefully. Let me trace the actual issue.
-
-The problem is in your HTML structure - you have nested map-container divs with the map controls inside a duplicate structure. Look at this section in your Dashboard tab:
-
-```html
-<div class="map-container" role="region" aria-label="Interactive site map">
-    <div id="map"></div>
-    
-<div class="map-container" role="region" aria-label="Interactive site map">
-    <div id="map"></div>
-    <!-- Add this fallback message -->
-    <div id="mapFallback" style="display: none; text-align: center; padding: 20px;">
-        <i class="bi bi-map"></i>
-        <p>Map is loading. Please wait...</p>
-    </div>
-
-    <div class="map-controls" ...>
-        ...
-    </div>
-```
-
-The first </div> after <div id="map"></div> closes the first map-container prematurely, leaving the second map-container open. This creates invalid HTML and confuses Leaflet.
-
-The Fix - Replace the entire map section in your Dashboard tab (around line 845-920) with this:
-
-```html
+                        <!-- Dashboard Widgets Row 2 -->
+                        <div class="row">
+                            <!-- Site Map -->
+                            <div class="col-md-8 mb-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="bi bi-map me-2" aria-hidden="true"></i>
+                                            Site Map
+                                            <span class="float-end">
+                                                <span class="badge bg-primary" id="mapEditMode">View Mode</span>
+                                            </span>
+                                        </h5>
+                                                                                  
 <div class="map-container" role="region" aria-label="Interactive site map">
     <div id="map"></div>
     <div id="mapFallback" style="display: none; text-align: center; padding: 20px;">
@@ -88,6 +76,12 @@ The Fix - Replace the entire map section in your Dashboard tab (around line 845-
         </div>
     </div>
 </div>
-```
 
-The key change: One single map-container div containing all elements, not nested duplicates.
+                            <!-- Compliance Checklist -->
+                            <div class="col-md-4 mb-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="bi bi-check2-square me-2" aria-hidden="true"></i>
+                                            Compliance Checklist
+                                        </h5>
