@@ -1,78 +1,93 @@
-I can see the issue - there's a syntax error in your SiteManager.switchSite function. The closing brace is missing, which breaks the entire JavaScript execution. Let me provide the exact fix:
+You're absolutely right, and I apologize for not looking more carefully. Let me trace the actual issue.
 
-The Critical Fix
+The problem is in your HTML structure - you have nested map-container divs with the map controls inside a duplicate structure. Look at this section in your Dashboard tab:
 
-In the SiteManager object, find the switchSite function (around line 1260-1290) and replace it with this corrected version:
+```html
+<div class="map-container" role="region" aria-label="Interactive site map">
+    <div id="map"></div>
+    
+<div class="map-container" role="region" aria-label="Interactive site map">
+    <div id="map"></div>
+    <!-- Add this fallback message -->
+    <div id="mapFallback" style="display: none; text-align: center; padding: 20px;">
+        <i class="bi bi-map"></i>
+        <p>Map is loading. Please wait...</p>
+    </div>
 
-```javascript
-switchSite: function(siteId) {
-    // Save current site data
-    Utils.saveData();
-    
-    // Clear map reference before switching
-    if (window.map) {
-        try {
-            window.map.remove();
-            window.map = null;
-        } catch(e) {
-            console.warn('Error clearing map:', e);
-        }
-    }
-    
-    // Update current site
-    db.currentSiteId = siteId;
-    
-    // Update UI
-    this.loadSiteSelector();
-    App.populateModalSiteIds();
-    
-    // Force chart update first
-    setTimeout(() => {
-        App.updateHealthChart();
-    }, 100);
-    
-    // Then load all data
-    setTimeout(() => {
-        App.loadAllData();
-    }, 200);
-    
-    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
-    
-    const site = db.sites.find(s => s && s.id === siteId);
-    Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
-}  // <-- THIS CLOSING BRACE WAS MISSING
+    <div class="map-controls" ...>
+        ...
+    </div>
 ```
 
-The Problem
+The first </div> after <div id="map"></div> closes the first map-container prematurely, leaving the second map-container open. This creates invalid HTML and confuses Leaflet.
 
-In your code, after the switchSite function you have:
+The Fix - Replace the entire map section in your Dashboard tab (around line 845-920) with this:
 
-```javascript
-switchSite: function(siteId) {
-    // ... function body ...
-}  // This closing brace was missing!
-
-            // ==================== CORE APP FUNCTIONS ====================
+```html
+<div class="map-container" role="region" aria-label="Interactive site map">
+    <div id="map"></div>
+    <div id="mapFallback" style="display: none; text-align: center; padding: 20px;">
+        <i class="bi bi-map"></i>
+        <p>Map is loading. Please wait...</p>
+    </div>
+    
+    <div class="map-controls" role="group" aria-label="Map controls">
+        <div class="btn-group-vertical w-100">
+            <div class="btn-group">
+                <button id="zoneToggle" class="btn btn-sm btn-outline-primary active" 
+                        aria-pressed="true" aria-label="Toggle zones layer">
+                    Zones
+                </button>
+                <button id="vegetationToggle" class="btn btn-sm btn-outline-success" 
+                        aria-pressed="false" aria-label="Toggle vegetation layer">
+                    Vegetation
+                </button>
+                <button id="weedsToggle" class="btn btn-sm btn-outline-danger" 
+                        aria-pressed="false" aria-label="Toggle weeds layer">
+                    Weeds
+                </button>
+            </div>
+            <hr class="my-1">
+            <div class="btn-group">
+                <button id="editModeBtn" class="btn btn-sm btn-warning" 
+                        aria-label="Toggle edit mode">
+                    <i class="bi bi-pencil-square"></i> Edit Mode
+                </button>
+                <button id="saveMapBtn" class="btn btn-sm btn-success" 
+                        aria-label="Save map changes">
+                    <i class="bi bi-save"></i> Save
+                </button>
+                <button id="clearMapBtn" class="btn btn-sm btn-danger" 
+                        aria-label="Clear all drawings">
+                    <i class="bi bi-trash"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="map-legend" id="mapLegend">
+        <div class="map-legend-item">
+            <div class="map-legend-color" style="background: #3498db80;"></div>
+            <span>Zones</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="map-legend-color" style="background: #27ae60;"></div>
+            <span>Vegetation</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="map-legend-color" style="background: #e74c3c;"></div>
+            <span>Weeds</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="marker-color-sample" style="background: #f1c40f;"></div>
+            <span>Pins</span>
+        </div>
+        <div class="map-legend-item">
+            <div class="marker-color-sample" style="background: #9b59b6;"></div>
+            <span>Points of Interest</span>
+        </div>
+    </div>
+</div>
 ```
 
-The missing } causes a JavaScript syntax error that prevents the entire script from executing, breaking everything.
-
-To fix your file:
-
-1. Find the switchSite function inside the SiteManager object
-2. Add the missing closing brace } right before the comment // ==================== CORE APP FUNCTIONS ====================
-
-Quick verification
-
-After fixing, the structure should look like:
-
-```javascript
-switchSite: function(siteId) {
-    // ... all the code ...
-},  // <-- comma after the function
-
-// ==================== CORE APP FUNCTIONS ====================
-const App = {
-```
-
-Once you add that missing closing brace, the entire application will work again with all your new features (image compression, 5-photo limit, data import, and async functions).
+The key change: One single map-container div containing all elements, not nested duplicates.
