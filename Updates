@@ -1,391 +1,387 @@
-You're right about the UserGuide.html - that's fine then.
+Here are the corrected functions with all the proper checks. Replace your existing initMap and initCalendar functions with these:
 
-The map not loading across multiple browsers (Edge, Firefox, Android) strongly suggests it's a code problem, not a browser issue. Let me help you debug this.
-
-🔍 Most Likely Causes
-
-1. Leaflet/Geoman Script Loading Order or Conflicts
-
-Check your browser's console (F12 → Console tab). You're likely seeing errors like:
-
-· L is not defined
-· L.control is not a function
-· pm is not defined
-· CORS or network errors
-
-2. Common Recent Breaking Changes
-
-Based on your code, here are the most probable issues:
-
-Issue A: Duplicate or Conflicting Leaflet Scripts
-
-You have multiple Leaflet-related scripts:
-
-```html
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-<!-- Leaflet Draw CSS/JS -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-
-<!-- Leaflet Geoman CSS/JS -->
-<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css"/>
-<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
-```
-
-Problem: Leaflet Draw and Leaflet Geoman can conflict. They both try to control drawing tools.
-
-Fix: Remove Leaflet Draw (Geoman is more modern and you're using it):
-
-```html
-<!-- Remove these two lines -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-```
-
-Issue B: Map Container Not Ready
-
-The map initialization might be happening before the DOM is fully ready.
-
-Fix: Ensure your map initialization has proper error handling and retries:
+📍 Complete Fixed initMap Function
 
 ```javascript
-// In your App.initMap() function, add more robust checking:
-initMap: function() {
-    console.log('Initializing map...');
+initMap: function(retryCount = 0) {
+    const maxRetries = 10;
+    const statusDiv = document.getElementById('mapInitStatus');
     
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map element not found - retrying in 500ms');
-        setTimeout(() => this.initMap(), 500);
-        return;
+    // Log for debugging (optional - remove in production)
+    if (statusDiv) {
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = `initMap() called (attempt ${retryCount + 1}/${maxRetries}) at ${new Date().toLocaleTimeString()}`;
     }
     
     // Check if Leaflet is loaded
     if (typeof L === 'undefined') {
-        console.error('Leaflet not loaded - retrying in 500ms');
-        setTimeout(() => this.initMap(), 500);
+        console.warn('Leaflet not loaded, retry ' + (retryCount + 1));
+        if (retryCount < maxRetries) {
+            setTimeout(() => this.initMap(retryCount + 1), 500);
+        } else if (statusDiv) {
+            statusDiv.innerHTML = 'ERROR: Leaflet library failed to load after ' + maxRetries + ' attempts';
+            statusDiv.style.background = '#ffcccc';
+        }
         return;
     }
     
-    // Rest of your map initialization code...
-}
-```
-
-Issue C: localStorage Data Corruption
-
-Your saved map data might be corrupted.
-
-Fix: Clear only map-related data:
-
-```javascript
-// Add a reset map data button or run this in console:
-localStorage.removeItem('ecosystem_site_maps');
-localStorage.removeItem('ecosystem_map_features');
-location.reload();
-```
-
-🛠️ Immediate Debugging Steps
-
-Step 1: Check Browser Console
-
-Open Developer Tools (F12) and look for RED errors. Common ones:
-
-· Uncaught ReferenceError: L is not defined → Leaflet didn't load
-· Uncaught TypeError: Cannot read property 'pm' of undefined → Geoman conflict
-· net::ERR_ABORTED 404 → Missing resource
-
-Step 2: Test Minimal Map
-
-Create a test HTML file to isolate the issue:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-</head>
-<body>
-    <div id="testmap" style="height: 500px;"></div>
-    <script>
-        const map = L.map('testmap').setView([-33.4, 150.3], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        console.log('Map works!');
-    </script>
-</body>
-</html>
-```
-
-If this works, your main app has conflicts. If not, network/CDN issue.
-
-Step 3: Check CDN Accessibility
-
-Your Android browser might be blocking certain CDNs. Test if these URLs load:
-
-· https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
-· https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js
-
-🔧 Quick Fix Code Changes
-
-Fix 1: Add Leaflet Fallback
-
-```javascript
-// Add this before your app initialization
-function ensureLeaflet() {
-    if (typeof L === 'undefined') {
-        console.warn('Leaflet not loaded, loading fallback...');
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => location.reload();
-        document.head.appendChild(script);
-        return false;
+    // Check if dashboard tab is active
+    const dashboardPane = document.getElementById('dashboard');
+    const isDashboardActive = dashboardPane && 
+                              dashboardPane.classList.contains('show') && 
+                              dashboardPane.classList.contains('active');
+    
+    if (!isDashboardActive) {
+        console.log('Dashboard not active, waiting...');
+        if (retryCount < maxRetries) {
+            setTimeout(() => this.initMap(retryCount + 1), 300);
+        }
+        return;
     }
-    return true;
-}
-```
-
-Fix 2: Wrap Map Initialization in Try-Catch
-
-```javascript
-initMap: function() {
+    
+    // Check if map container exists
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map container not found');
+        if (retryCount < maxRetries) {
+            setTimeout(() => this.initMap(retryCount + 1), 300);
+        }
+        return;
+    }
+    
+    // Ensure container has proper dimensions
+    mapContainer.style.height = '500px';
+    mapContainer.style.width = '100%';
+    mapContainer.innerHTML = ''; // Clear any existing content
+    
+    // Get current site
+    const siteId = db.currentSiteId;
+    const site = Utils.getCurrentSite();
+    
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected. Please create or select a site.</div>';
+        if (statusDiv) statusDiv.innerHTML = 'ERROR: No site selected';
+        return;
+    }
+    
+    // Get or generate map data
+    let mapData = db.siteMaps[siteId];
+    if (!mapData || !mapData.center || !Array.isArray(mapData.center)) {
+        console.log('Invalid map data, regenerating...');
+        mapData = Utils.generateSiteLocation(siteId);
+        db.siteMaps[siteId] = mapData;
+        Utils.saveData();
+    }
+    
+    // Destroy existing map if any
+    if (window.map) {
+        try {
+            window.map.remove();
+        } catch(e) {
+            console.warn('Error removing existing map:', e);
+        }
+        window.map = null;
+    }
+    
     try {
-        console.log('Initializing map...');
-        // ... existing map code ...
+        // Create new map
+        window.map = L.map('map', {
+            center: mapData.center,
+            zoom: 13,
+            zoomControl: true,
+            fadeAnimation: false, // Better performance
+            zoomAnimation: false
+        });
+        
+        // Add tile layer with error handling
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19,
+            errorTileUrl: '' // Prevent error image
+        }).addTo(window.map);
+        
+        // Handle tile loading errors
+        tileLayer.on('tileerror', function(error) {
+            console.warn('Tile failed to load:', error);
+        });
+        
+        // Add main site marker
+        L.marker(mapData.center).addTo(window.map)
+            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
+            .openPopup();
+        
+        // Create map layers
+        this.createMapLayers(mapData);
+        
+        // Initialize editing tools with safety check
+        if (typeof MapEditor !== 'undefined' && MapEditor.initEditing) {
+            try {
+                MapEditor.initEditing();
+            } catch(e) {
+                console.warn('Map editing not available:', e);
+            }
+        }
+        
+        // Force map to recalculate size after a moment
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+                console.log('Map size invalidated');
+            }
+        }, 200);
+        
+        // Additional resize on window resize
+        const resizeHandler = () => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+            }
+        };
+        window.removeEventListener('resize', resizeHandler);
+        window.addEventListener('resize', resizeHandler);
+        
+        if (statusDiv) {
+            statusDiv.innerHTML = '✅ Map loaded successfully!';
+            statusDiv.style.background = '#ccffcc';
+            setTimeout(() => {
+                if (statusDiv) statusDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        console.log('Map initialized successfully for site:', site.name);
+        
     } catch (error) {
-        console.error('Map initialization failed:', error);
-        const mapContainer = document.getElementById('map');
-        if (mapContainer) {
-            mapContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    <strong>Map Error:</strong> ${error.message}<br>
-                    <button onclick="location.reload()" class="btn btn-sm btn-primary mt-2">
-                        Reload Page
-                    </button>
-                </div>
-            `;
+        console.error('Map creation failed:', error);
+        mapContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Map Error:</strong> ${error.message}<br>
+                <button onclick="location.reload()" class="btn btn-sm btn-primary mt-2">
+                    Reload Page
+                </button>
+            </div>
+        `;
+        if (statusDiv) {
+            statusDiv.innerHTML = '❌ Map creation failed: ' + error.message;
+            statusDiv.style.background = '#ffcccc';
         }
     }
 }
 ```
 
-Fix 3: Delay Map Loading
+📅 Complete Fixed initCalendar Function
 
 ```javascript
-// In your App.init(), change the map initialization:
-setTimeout(() => {
-    this.initMap();
-}, 1000); // Increase from 500ms to 1000ms
-```
-
-🎯 Most Likely Solution
-
-Based on your symptoms, I suspect Leaflet Geoman is failing to load due to a version conflict or network issue. Try:
-
-1. Remove Leaflet Draw completely (lines 65-66 and 87-88 in your head section)
-2. Use specific versions instead of "latest" for Geoman:
-
-```html
-<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.css"/>
-```
-
-1. Add Leaflet CSS integrity check (remove the integrity attribute temporarily - it might be blocking)
-2. Clear ALL browser data (not just cache):
-   · Edge: Settings → Privacy → Clear browsing data → "All time" → Check everything
-   · Or use a private/incognito window to test
-
-📞 Need More Help?
-
-If none of this works, please:
-
-1. Open browser console (F12) and tell me the exact error messages
-2. Check Network tab (F12 → Network) - are Leaflet and Geoman scripts loading (status 200)?
-3. Try this in console: console.log(typeof L, typeof L?.map, typeof L?.pm)
-
-The fact that it worked before and stopped after updates means we can fix it - just need to identify what changed!
-
-
-
-
-
-
-
-
-
-
-
-
-
-Ah, that's a critical clue! If even the previous working version now fails, this points to an external factor, not your code changes.
-
-🎯 The Real Problem: External/CDN Issues
-
-Since multiple browsers AND your phone all fail, and even old versions don't work, the issue is almost certainly:
-
-1. CDN/Network Outage or Blocking
-
-One of these CDNs might be down or blocked in your region:
-
-· unpkg.com (Leaflet, Geoman)
-· cdnjs.cloudflare.com (Leaflet Draw, other libs)
-· cdn.jsdelivr.net (Bootstrap, Chart.js)
-
-Quick Test: Open these URLs in your browser:
-
-· https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
-· https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css
-
-If they don't load or show errors, that's your problem.
-
-2. Ad Blocker or Security Software
-
-Your ad blocker, antivirus, or corporate firewall might be blocking:
-
-· unpkg.com (sometimes flagged as "ad/tracker")
-· cloudflare.com domains
-· Scripts with certain patterns
-
-Test: Disable ad blocker completely or try in a private window with extensions disabled.
-
-3. DNS Issues
-
-Your DNS might be failing to resolve these CDNs.
-
-Test:
-
-```bash
-# In Command Prompt/Terminal
-nslookup unpkg.com
-nslookup cdnjs.cloudflare.com
-```
-
-🔧 Immediate Solutions to Try
-
-Solution 1: Use Alternative CDNs (Fastest Fix)
-
-Replace your CDN URLs with working alternatives:
-
-```html
-<!-- Replace Leaflet -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-
-<!-- Replace Bootstrap (if needed) -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-
-<!-- Geoman - this is harder, try different version -->
-<script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.min.js"></script>
-```
-
-Solution 2: Host Files Locally (Most Reliable)
-
-Download these files and host them locally:
-
-1. Download Leaflet from https://leafletjs.com/download
-2. Download Bootstrap locally
-3. Download Geoman from GitHub
-
-Then reference local files:
-
-```html
-<link rel="stylesheet" href="/lib/leaflet/leaflet.css"/>
-<script src="/lib/leaflet/leaflet.js"></script>
-```
-
-Solution 3: Use a CDN Proxy
-
-Add this before your other scripts:
-
-```html
-<!-- Add CDN fallback -->
-<script>
-window.loadCDN = function(url, fallbackUrl) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = url;
-        script.onload = resolve;
-        script.onerror = () => {
-            if (fallbackUrl) {
-                const fallbackScript = document.createElement('script');
-                fallbackScript.src = fallbackUrl;
-                fallbackScript.onload = resolve;
-                fallbackScript.onerror = reject;
-                document.head.appendChild(fallbackScript);
-            } else {
-                reject();
-            }
+initCalendar: function(retryCount = 0) {
+    const maxRetries = 10;
+    const calendarEl = document.getElementById('calendar');
+    
+    if (!calendarEl) {
+        console.warn('Calendar element not found');
+        if (retryCount < maxRetries) {
+            setTimeout(() => this.initCalendar(retryCount + 1), 500);
+        }
+        return;
+    }
+    
+    // Check if FullCalendar is loaded
+    if (typeof FullCalendar === 'undefined') {
+        console.warn('FullCalendar not loaded, retry ' + (retryCount + 1));
+        if (retryCount < maxRetries) {
+            setTimeout(() => this.initCalendar(retryCount + 1), 500);
+        } else {
+            calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded. Please refresh the page.</div>';
+        }
+        return;
+    }
+    
+    // Check if maintenance tab is active (for proper sizing)
+    const maintenancePane = document.getElementById('maintenance-plan');
+    const isMaintenanceActive = maintenancePane && 
+                                maintenancePane.classList.contains('show') && 
+                                maintenancePane.classList.contains('active');
+    
+    // Prepare events
+    const events = Utils.filterByCurrentSite(db.activities).map(activity => {
+        if (!activity) return null;
+        return {
+            id: activity.id.toString(),
+            title: activity.title,
+            start: activity.startDate,
+            end: activity.endDate || activity.startDate,
+            allDay: true,
+            extendedProps: {
+                type: activity.type,
+                location: activity.location,
+                assignedTo: activity.assignedTo,
+                status: activity.status
+            },
+            backgroundColor: this.getActivityColor(activity.type),
+            borderColor: this.getActivityColor(activity.type),
+            textColor: '#fff'
         };
-        document.head.appendChild(script);
-    });
-};
-</script>
+    }).filter(e => e !== null);
+    
+    // Ensure container has minimum height
+    calendarEl.style.minHeight = '600px';
+    
+    // Destroy existing calendar if any
+    if (window.calendar) {
+        try {
+            window.calendar.destroy();
+        } catch(e) {
+            console.warn('Error destroying existing calendar:', e);
+        }
+        window.calendar = null;
+    }
+    
+    try {
+        // Create new calendar
+        window.calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: events,
+            eventClick: (info) => {
+                const activity = db.activities.find(a => a && a.id.toString() === info.event.id);
+                if (activity) this.showActivityDetails(activity);
+            },
+            height: 600,
+            stickyHeaderDates: true,
+            handleWindowResize: true,
+            contentHeight: 'auto',
+            aspectRatio: 1.5,
+            nowIndicator: true,
+            eventTimeFormat: {
+                hour: '2-digit',
+                minute: '2-digit',
+                meridiem: false
+            }
+        });
+        
+        window.calendar.render();
+        
+        // If calendar is in hidden tab, mark it for refresh when shown
+        if (!isMaintenanceActive) {
+            window.calendarNeedsRefresh = true;
+            console.log('Calendar initialized in hidden tab - will refresh when shown');
+        } else {
+            // Calendar is visible, ensure proper sizing
+            setTimeout(() => {
+                if (window.calendar) {
+                    window.calendar.updateSize();
+                    console.log('Calendar size updated');
+                }
+            }, 100);
+        }
+        
+        console.log('Calendar initialized successfully');
+        
+    } catch (error) {
+        console.error('Calendar initialization failed:', error);
+        calendarEl.innerHTML = '<div class="alert alert-warning">Calendar could not be loaded. Please refresh the page.</div>';
+    }
+}
 ```
 
-Solution 4: Check If It's Your Internet/Network
+🔧 Add These Helper Methods to Your App
 
-Test on mobile data (turn off WiFi on your phone):
-
-· If map loads on mobile data but not WiFi → Your home/office network is blocking CDNs
-· If still fails on mobile data → Issue is likely the CDNs themselves
-
-🚨 Most Likely Culprit: unpkg.com Issues
-
-I've seen unpkg.com become unreliable recently. Try this immediate test:
-
-Replace ALL your unpkg.com references with cdnjs or jsdelivr:
-
-```html
-<!-- Change THIS: -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- To THIS: -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-
-<!-- Change Geoman: -->
-<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
-
-<!-- To THIS (use specific version from jsdelivr): -->
-<script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.min.js"></script>
-```
-
-📊 Diagnostic Script
-
-Add this to your page temporarily to see what's failing:
+Also add these two helper methods to your App object:
 
 ```javascript
-// Add this right after your <body> tag
-<script>
-const resources = [
-    'Leaflet CSS', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'Leaflet JS', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'Bootstrap CSS', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-    'Geoman JS', 'https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js'
-];
+// Add this to your App object (near other methods)
+refreshCalendarIfVisible: function() {
+    if (!window.calendar) return;
+    
+    const maintenancePane = document.getElementById('maintenance-plan');
+    const isMaintenanceActive = maintenancePane && 
+                                maintenancePane.classList.contains('show') && 
+                                maintenancePane.classList.contains('active');
+    
+    if (isMaintenanceActive) {
+        setTimeout(() => {
+            if (window.calendar) {
+                window.calendar.updateSize();
+                if (window.calendarNeedsRefresh) {
+                    window.calendar.refetchEvents();
+                    window.calendarNeedsRefresh = false;
+                    console.log('Calendar refreshed after tab switch');
+                }
+            }
+        }, 150);
+    }
+},
 
-for (let i = 0; i < resources.length; i += 2) {
-    fetch(resources[i+1], { method: 'HEAD', mode: 'no-cors' })
-        .then(() => console.log('✓', resources[i], 'accessible'))
-        .catch(() => console.error('✗', resources[i], 'FAILED to load'));
+// Also add this for map refresh
+refreshMapIfVisible: function() {
+    if (!window.map) return;
+    
+    const dashboardPane = document.getElementById('dashboard');
+    const isDashboardActive = dashboardPane && 
+                              dashboardPane.classList.contains('show') && 
+                              dashboardPane.classList.contains('active');
+    
+    if (isDashboardActive) {
+        setTimeout(() => {
+            if (window.map && window.map.invalidateSize) {
+                window.map.invalidateSize(true);
+                console.log('Map refreshed after tab switch');
+            }
+        }, 150);
+    }
 }
-</script>
 ```
 
-🎯 The Bottom Line
+📍 Update Your Tab Event Listeners
 
-Since even your working version now fails:
+Finally, update your tab event listeners to use these new methods:
 
-1. It's NOT your code - something external changed
-2. Most likely: unpkg.com is having issues or being blocked
-3. Quickest fix: Replace all unpkg.com URLs with cdnjs or jsdelivr
-4. Most reliable: Download and host files locally
+```javascript
+// In your setupEventListeners function, update the tab listener:
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', (e) => {
+        const target = e.target.getAttribute('data-bs-target');
+        
+        // Refresh map when dashboard tab is shown
+        if (target === '#dashboard') {
+            this.refreshMapIfVisible();
+        }
+        
+        // Refresh calendar when maintenance tab is shown
+        if (target === '#maintenance-plan') {
+            this.refreshCalendarIfVisible();
+        }
+        
+        // Your existing code for other tabs...
+        if (target === '#site-assessment') {
+            this.loadAssessments();
+        } else if (target === '#species-register') {
+            this.loadSpecies();
+        } else if (target === '#monitoring') {
+            this.loadMonitoring();
+        } else if (target === '#reports') {
+            this.loadReports();
+        } else if (target === '#legislation') {
+            this.loadComplianceChecklist();
+        } else if (target === '#settings') {
+            this.loadSettings();
+        }
+    });
+});
+```
 
-Try this right now:
+🧪 Test These Changes
 
-1. Open browser console (F12)
-2. Look for red errors - they'll tell you exactly which file failed to load
-3. Tell me what the error says, and I'll give you the exact fix
+1. Replace your existing initMap and initCalendar functions
+2. Add the two helper methods (refreshCalendarIfVisible, refreshMapIfVisible)
+3. Update your tab event listeners
+4. Add the debug div temporarily to see what's happening:
 
-My bet is you'll see something like: GET https://unpkg.com/leaflet@1.9.4/dist/leaflet.js net::ERR_CONNECTION_REFUSED or Failed to load resource: net::ERR_BLOCKED_BY_CLIENT
+```html
+<div id="mapInitStatus" style="background:#ffffcc;padding:5px;margin:5px;font-size:11px;border:1px solid #ccc"></div>
+```
+
+1. Refresh and test
+
+The map should now load reliably, and the calendar should show immediately when you click the Maintenance Plan tab!
