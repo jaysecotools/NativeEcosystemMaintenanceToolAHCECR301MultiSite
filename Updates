@@ -1,288 +1,207 @@
-Looking at your code, I can identify several critical errors causing the empty cards/containers and blank pages:
+You're right about the UserGuide.html - that's fine then.
 
-Critical Issues:
+The map not loading across multiple browsers (Edge, Firefox, Android) strongly suggests it's a code problem, not a browser issue. Let me help you debug this.
 
-1. Missing Bootstrap JavaScript Module
+🔍 Most Likely Causes
 
-The Bootstrap JS is loaded but not properly initialized for tabs:
+1. Leaflet/Geoman Script Loading Order or Conflicts
 
-```html
-<!-- Current (problematic) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+Check your browser's console (F12 → Console tab). You're likely seeing errors like:
 
-<!-- Missing: Bootstrap doesn't auto-initialize tabs without proper data-bs-toggle attributes -->
-```
+· L is not defined
+· L.control is not a function
+· pm is not defined
+· CORS or network errors
 
-2. Map Initialization Race Condition
+2. Common Recent Breaking Changes
 
-The map tries to initialize before the DOM is fully ready, and the container dimensions may not be set:
+Based on your code, here are the most probable issues:
 
-```javascript
-// Current issue in App.init():
-setTimeout(() => {
-    this.initMap(); // Map container may not have proper dimensions
-}, 300);
-```
+Issue A: Duplicate or Conflicting Leaflet Scripts
 
-3. Data Loading Without Site Validation
-
-The app tries to load data before confirming a site exists:
-
-```javascript
-// Problem: loadAllData() runs even when db.currentSiteId is null
-loadAllData: function() {
-    if (!db.currentSiteId) {
-        // Logs warning but continues execution
-        console.warn('No site selected, cannot load data');
-        return; // This return is missing in your actual code!
-    }
-}
-```
-
-4. Chart.js Initialization Before Canvas Ready
-
-Charts try to render on canvases that may not be visible yet:
-
-```javascript
-initCharts: function() {
-    // Canvas may be in a non-active tab (display:none)
-    const faunaCtx = document.getElementById('faunaChart'); // May have 0x0 dimensions
-}
-```
-
-Immediate Fixes:
-
-Fix 1: Ensure Bootstrap Tabs Work
-
-Add this after your Bootstrap script:
+You have multiple Leaflet-related scripts:
 
 ```html
-<script>
-// Force Bootstrap tab initialization
-document.addEventListener('DOMContentLoaded', function() {
-    var triggerTabList = [].slice.call(document.querySelectorAll('#mainTabContent button[data-bs-toggle="tab"]'))
-    triggerTabList.forEach(function(triggerEl) {
-        var tabTrigger = new bootstrap.Tab(triggerEl)
-        triggerEl.addEventListener('click', function(event) {
-            event.preventDefault()
-            tabTrigger.show()
-        })
-    })
-})
-</script>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<!-- Leaflet Draw CSS/JS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<!-- Leaflet Geoman CSS/JS -->
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css"/>
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
 ```
 
-Fix 2: Fix the loadAllData Function
+Problem: Leaflet Draw and Leaflet Geoman can conflict. They both try to control drawing tools.
 
-Replace your existing loadAllData function with this:
+Fix: Remove Leaflet Draw (Geoman is more modern and you're using it):
+
+```html
+<!-- Remove these two lines -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+```
+
+Issue B: Map Container Not Ready
+
+The map initialization might be happening before the DOM is fully ready.
+
+Fix: Ensure your map initialization has proper error handling and retries:
 
 ```javascript
-loadAllData: function() {
-    console.log('Loading all data for site:', db.currentSiteId);
+// In your App.initMap() function, add more robust checking:
+initMap: function() {
+    console.log('Initializing map...');
     
-    // CRITICAL FIX: Don't try to load data if no site is selected
-    if (!db.currentSiteId) {
-        console.warn('No site selected, cannot load data');
-        // Show empty states instead of crashing
-        this.showEmptyStates();
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map element not found - retrying in 500ms');
+        setTimeout(() => this.initMap(), 500);
         return;
     }
     
-    // Clear existing map reference before loading new data
-    if (window.map) {
-        try {
-            window.map.off();
-            if (window.map.eachLayer) {
-                window.map.eachLayer(function(layer) {
-                    if (layer && layer.remove) {
-                        layer.remove();
-                    }
-                });
-            }
-            window.map.remove();
-        } catch(e) {
-            console.warn('Error clearing map:', e);
-        }
-        window.map = null;
-    }
-    
-    // Load all UI components
-    try { this.loadDashboard(); } catch(e) { console.error('Dashboard error:', e); }
-    try { this.loadAssessments(); } catch(e) { console.error('Assessments error:', e); }
-    try { this.loadSpecies(); } catch(e) { console.error('Species error:', e); }
-    try { this.loadActivities(); } catch(e) { console.error('Activities error:', e); }
-    try { this.loadMonitoring(); } catch(e) { console.error('Monitoring error:', e); }
-    try { this.loadReports(); } catch(e) { console.error('Reports error:', e); }
-    try { this.loadComplianceChecklist(); } catch(e) { console.error('Compliance error:', e); }
-    try { this.loadSettings(); } catch(e) { console.error('Settings error:', e); }
-    
-    // Refresh calendar if it exists
-    if (window.calendar) {
-        try { window.calendar.refetchEvents(); } catch(e) { console.error('Calendar error:', e); }
-    }
-    
-    // Initialize map after a delay to ensure DOM is ready
-    setTimeout(() => {
-        try {
-            if (document.getElementById('map') && document.getElementById('map').offsetParent !== null) {
-                this.initMap();
-            } else {
-                console.warn('Map container not visible or not found');
-            }
-        } catch(e) {
-            console.error('Map initialization error:', e);
-        }
-    }, 500);
-    
-    console.log('Data loading complete');
-},
-
-showEmptyStates: function() {
-    // Show empty states for all major components
-    const upcomingTasks = document.getElementById('upcomingTasksList');
-    if (upcomingTasks) {
-        upcomingTasks.innerHTML = '<div class="alert alert-info">Select or create a site to view data</div>';
-    }
-    
-    const speciesTable = document.querySelector('#speciesTable tbody');
-    if (speciesTable) {
-        speciesTable.innerHTML = '<tr><td colspan="6" class="text-center">Select or create a site to view species</td></tr>';
-    }
-    
-    const assessmentsTable = document.querySelector('#assessmentsTable tbody');
-    if (assessmentsTable) {
-        assessmentsTable.innerHTML = '<tr><td colspan="5" class="text-center">Select or create a site to view assessments</td></tr>';
-    }
-}
-```
-
-Fix 3: Fix the Dashboard Loading
-
-Update the loadDashboard function to handle empty states better:
-
-```javascript
-loadDashboard: function() {
-    // Check if we have a current site
-    if (!db.currentSiteId) {
-        const dashboardElements = ['totalTasks', 'totalAssessments', 'totalSpecies', 'compliancePercent'];
-        dashboardElements.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = '0';
-        });
-        
-        const tasksList = document.getElementById('upcomingTasksList');
-        if (tasksList) {
-            tasksList.innerHTML = '<div class="alert alert-warning">No site selected. Please create or select a site.</div>';
-        }
+    // Check if Leaflet is loaded
+    if (typeof L === 'undefined') {
+        console.error('Leaflet not loaded - retrying in 500ms');
+        setTimeout(() => this.initMap(), 500);
         return;
     }
     
-    // Rest of your existing loadDashboard code...
-    const currentSite = Utils.getCurrentSite();
-    // ... existing code ...
+    // Rest of your map initialization code...
 }
 ```
 
-Fix 4: Fix Chart Initialization
+Issue C: localStorage Data Corruption
 
-Modify your chart initialization to only create charts when canvases are visible:
+Your saved map data might be corrupted.
+
+Fix: Clear only map-related data:
 
 ```javascript
-initCharts: function() {
-    // Wait for tab to be visible before creating charts
-    const checkVisibilityAndInit = () => {
-        const dashboardTab = document.getElementById('dashboard');
-        if (dashboardTab && dashboardTab.classList.contains('active')) {
-            this.updateHealthChart();
-            
-            // Only initialize other charts if their canvases exist and are visible
-            const faunaCanvas = document.getElementById('faunaChart');
-            if (faunaCanvas && faunaCanvas.offsetParent !== null && typeof Chart !== 'undefined') {
-                if (window.faunaChart) window.faunaChart.destroy();
-                window.faunaChart = new Chart(faunaCanvas, {
-                    type: 'line',
-                    data: {
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                        datasets: [{
-                            label: 'Koala',
-                            data: [2, 3, 1, 4, 3, 2],
-                            borderColor: 'rgba(220, 53, 69, 1)',
-                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                            fill: true
-                        }]
-                    },
-                    options: { responsive: true }
-                });
-            }
-            
-            const vegetationCanvas = document.getElementById('vegetationChart');
-            if (vegetationCanvas && vegetationCanvas.offsetParent !== null && typeof Chart !== 'undefined') {
-                if (window.vegetationChart) window.vegetationChart.destroy();
-                window.vegetationChart = new Chart(vegetationCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4'],
-                        datasets: [{
-                            label: 'Native Cover (%)',
-                            data: [75, 60, 45, 80],
-                            backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        }]
-                    },
-                    options: { responsive: true }
-                });
-            }
-        }
-    };
-    
-    // Check immediately and also when tabs change
-    checkVisibilityAndInit();
-    
-    // Re-check when dashboard tab becomes active
-    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-        tab.addEventListener('shown.bs.tab', (e) => {
-            if (e.target.getAttribute('data-bs-target') === '#dashboard') {
-                setTimeout(checkVisibilityAndInit, 100);
-            }
-        });
-    });
+// Add a reset map data button or run this in console:
+localStorage.removeItem('ecosystem_site_maps');
+localStorage.removeItem('ecosystem_map_features');
+location.reload();
+```
+
+🛠️ Immediate Debugging Steps
+
+Step 1: Check Browser Console
+
+Open Developer Tools (F12) and look for RED errors. Common ones:
+
+· Uncaught ReferenceError: L is not defined → Leaflet didn't load
+· Uncaught TypeError: Cannot read property 'pm' of undefined → Geoman conflict
+· net::ERR_ABORTED 404 → Missing resource
+
+Step 2: Test Minimal Map
+
+Create a test HTML file to isolate the issue:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div id="testmap" style="height: 500px;"></div>
+    <script>
+        const map = L.map('testmap').setView([-33.4, 150.3], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        console.log('Map works!');
+    </script>
+</body>
+</html>
+```
+
+If this works, your main app has conflicts. If not, network/CDN issue.
+
+Step 3: Check CDN Accessibility
+
+Your Android browser might be blocking certain CDNs. Test if these URLs load:
+
+· https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+· https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js
+
+🔧 Quick Fix Code Changes
+
+Fix 1: Add Leaflet Fallback
+
+```javascript
+// Add this before your app initialization
+function ensureLeaflet() {
+    if (typeof L === 'undefined') {
+        console.warn('Leaflet not loaded, loading fallback...');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = () => location.reload();
+        document.head.appendChild(script);
+        return false;
+    }
+    return true;
 }
 ```
 
-Fix 5: Add Error Boundary for Map Container
-
-Add this to your map initialization:
+Fix 2: Wrap Map Initialization in Try-Catch
 
 ```javascript
 initMap: function() {
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map element not found');
-        return;
+    try {
+        console.log('Initializing map...');
+        // ... existing map code ...
+    } catch (error) {
+        console.error('Map initialization failed:', error);
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+            mapContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Map Error:</strong> ${error.message}<br>
+                    <button onclick="location.reload()" class="btn btn-sm btn-primary mt-2">
+                        Reload Page
+                    </button>
+                </div>
+            `;
+        }
     }
-    
-    // Check if container is visible
-    if (mapContainer.offsetParent === null) {
-        console.warn('Map container not visible, waiting...');
-        // Wait for container to become visible
-        const observer = new MutationObserver(() => {
-            if (mapContainer.offsetParent !== null) {
-                observer.disconnect();
-                this.initMap();
-            }
-        });
-        observer.observe(mapContainer, { attributes: true, attributeFilter: ['style', 'class'] });
-        return;
-    }
-    
-    // Rest of your existing initMap code...
 }
 ```
 
-Quick Testing Steps:
+Fix 3: Delay Map Loading
 
-1. Open browser console (F12) to see specific errors
-2. Check if localStorage has data (Application tab in DevTools)
-3. Verify all CDN resources loaded (Network tab)
-4. Create a site first if none exists
+```javascript
+// In your App.init(), change the map initialization:
+setTimeout(() => {
+    this.initMap();
+}, 1000); // Increase from 500ms to 1000ms
+```
 
-These fixes should resolve the empty containers and blank pages issue. The core problem is that your app tries to display data before ensuring a site exists and before the DOM elements are ready for rendering.
+🎯 Most Likely Solution
+
+Based on your symptoms, I suspect Leaflet Geoman is failing to load due to a version conflict or network issue. Try:
+
+1. Remove Leaflet Draw completely (lines 65-66 and 87-88 in your head section)
+2. Use specific versions instead of "latest" for Geoman:
+
+```html
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.0/dist/leaflet-geoman.css"/>
+```
+
+1. Add Leaflet CSS integrity check (remove the integrity attribute temporarily - it might be blocking)
+2. Clear ALL browser data (not just cache):
+   · Edge: Settings → Privacy → Clear browsing data → "All time" → Check everything
+   · Or use a private/incognito window to test
+
+📞 Need More Help?
+
+If none of this works, please:
+
+1. Open browser console (F12) and tell me the exact error messages
+2. Check Network tab (F12 → Network) - are Leaflet and Geoman scripts loading (status 200)?
+3. Try this in console: console.log(typeof L, typeof L?.map, typeof L?.pm)
+
+The fact that it worked before and stopped after updates means we can fix it - just need to identify what changed!
