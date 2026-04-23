@@ -1,91 +1,30 @@
-Looking at this code, I can identify the major error:
+The issue is much more fundamental than just the switchSite function. Looking at your code, I can see the major error: The App.init() function is never actually completing initialization because the loadInitialData() function is creating data BEFORE db.currentSiteId is properly set.
 
-The App.init() function is called BEFORE the map container exists in the DOM
+But the critical showstopper: Your JavaScript has syntax errors and race conditions that prevent ANY data from loading.
 
-Location: Lines near the end of the <script>:
+Let me give you the immediate fix - replace your entire App.loadAllData() function with this corrected version:
 
 ```javascript
-document.addEventListener('DOMContentLoaded', function() {
-    if (!document.getElementById('map')) {
-        console.error('Map container missing from DOM');
+loadAllData: function() {
+    console.log('Loading all data for site:', db.currentSiteId);
+    
+    // CRITICAL FIX: Don't try to load data if no site is selected
+    if (!db.currentSiteId) {
+        console.warn('No site selected, cannot load data');
+        return;
     }
     
-    setTimeout(function() {
-        App.init();  // This calls App.init()
-    }, 100);
-});
-```
-
-But inside App.init(), there's a nested setTimeout that calls App.initMap() after 500ms. However, there's a critical race condition:
-
-The actual major error:
-
-MapEditor.initEditing() is called before window.map exists.
-
-In App.initMap(), after creating the map, it calls this.createMapLayers(mapData) which then calls MapEditor.initEditing(). However, MapEditor.initEditing() has this line:
-
-```javascript
-if (!window.map) {
-    console.error('Map not initialized');
-    return;  // Early return - editing never gets initialized!
-}
-```
-
-But looking more carefully, the real major error is that App.init() is being called twice or the map initialization is broken because:
-
-1. The map container may not be fully rendered when App.init() runs
-2. Multiple map instances are created because of improper cleanup
-3. The health chart is destroyed but not properly recreated when switching sites
-
-The most critical error visible is:
-
-```javascript
-// In App.switchSite() - line ~2520
-switchSite: function(siteId) {
-    // Save current site data
-    Utils.saveData();
-    
-    // Clear map reference before switching
+    // Clear existing map reference before loading new data
     if (window.map) {
         try {
-            window.map.remove();
-            window.map = null;
-        } catch(e) {
-            console.warn('Error clearing map:', e);
-        }
-    }
-    
-    // ... 
-    
-    // Then load all data
-    setTimeout(() => {
-        App.loadAllData();  // This calls initMap() again
-    }, 200);
-}
-```
-
-The problem: loadAllData() calls initMap() which creates a NEW map, but the old map's event listeners may not be fully cleaned up, causing memory leaks and duplicate layers.
-
-The Fix:
-
-Replace the map cleanup in switchSite with a more thorough cleanup:
-
-```javascript
-switchSite: function(siteId) {
-    Utils.saveData();
-    
-    // Complete map cleanup
-    if (window.map) {
-        try {
-            // Remove all event listeners
             window.map.off();
-            // Remove all layers
-            window.map.eachLayer(function(layer) {
-                if (layer && layer.remove) {
-                    layer.remove();
-                }
-            });
-            // Remove the map
+            if (window.map.eachLayer) {
+                window.map.eachLayer(function(layer) {
+                    if (layer && layer.remove) {
+                        layer.remove();
+                    }
+                });
+            }
             window.map.remove();
         } catch(e) {
             console.warn('Error clearing map:', e);
@@ -93,7 +32,7 @@ switchSite: function(siteId) {
         window.map = null;
     }
     
-    // Clear layer references
+    // Clear all layer globals
     window.zonesLayer = null;
     window.vegetationLayer = null;
     window.weedsLayer = null;
@@ -102,25 +41,269 @@ switchSite: function(siteId) {
     window.customWeedsLayer = null;
     window.customPointsLayer = null;
     
-    db.currentSiteId = siteId;
-    SiteManager.loadSiteSelector();
-    App.populateModalSiteIds();
+    // Load all UI components - but wrap each in try/catch to prevent cascading failures
+    try {
+        this.loadDashboard();
+    } catch(e) {
+        console.error('Error loading dashboard:', e);
+    }
     
-    // Force chart update first
+    try {
+        this.loadAssessments();
+    } catch(e) {
+        console.error('Error loading assessments:', e);
+    }
+    
+    try {
+        this.loadSpecies();
+    } catch(e) {
+        console.error('Error loading species:', e);
+    }
+    
+    try {
+        this.loadActivities();
+    } catch(e) {
+        console.error('Error loading activities:', e);
+    }
+    
+    try {
+        this.loadMonitoring();
+    } catch(e) {
+        console.error('Error loading monitoring:', e);
+    }
+    
+    try {
+        this.loadReports();
+    } catch(e) {
+        console.error('Error loading reports:', e);
+    }
+    
+    try {
+        this.loadComplianceChecklist();
+    } catch(e) {
+        console.error('Error loading compliance:', e);
+    }
+    
+    try {
+        this.loadSettings();
+    } catch(e) {
+        console.error('Error loading settings:', e);
+    }
+    
+    try {
+        this.populateModalSiteIds();
+    } catch(e) {
+        console.error('Error populating modal IDs:', e);
+    }
+    
+    // Refresh calendar if it exists
+    if (window.calendar) {
+        try {
+            window.calendar.refetchEvents();
+        } catch (e) {
+            console.error('Error refreshing calendar:', e);
+        }
+    }
+    
+    // Force chart update
     setTimeout(() => {
-        App.updateHealthChart();
+        try {
+            this.updateHealthChart();
+        } catch(e) {
+            console.error('Error updating health chart:', e);
+        }
     }, 100);
     
-    // Then reload everything
+    // Initialize map with a delay
     setTimeout(() => {
-        App.loadAllData();
-    }, 200);
+        try {
+            if (document.getElementById('map')) {
+                this.initMap();
+            } else {
+                console.warn('Map container not found');
+            }
+        } catch(e) {
+            console.error('Error initializing map:', e);
+            // Show error in map container
+            const mapContainer = document.getElementById('map');
+            if (mapContainer) {
+                mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load. Please refresh the page.</div>';
+            }
+        }
+    }, 300);
     
-    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite'))?.hide();
+    console.log('Data loading complete');
+},
+```
+
+But the REAL major error is in your loadInitialData() function. It's trying to create sample data but referencing db.currentSiteId which might be null. Replace it with:
+
+```javascript
+loadInitialData: function() {
+    // CRITICAL FIX: Ensure we have a current site first
+    if (!db.currentSiteId && db.sites.length > 0) {
+        db.currentSiteId = db.sites[0].id;
+    }
     
-    const site = db.sites.find(s => s && s.id === siteId);
-    Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
+    if (!db.currentSiteId) {
+        console.warn('Cannot load initial data - no site available');
+        return;
+    }
+    
+    const siteId = db.currentSiteId;
+    console.log('Loading initial data for site:', siteId);
+    
+    if (db.assessments.length === 0) {
+        db.assessments = [
+            {
+                id: Utils.generateId(),
+                siteId: siteId,
+                date: '2023-06-15',
+                assessor: 'Jane Doe',
+                description: 'Initial assessment of the northern section of the conservation area.',
+                components: ['flora', 'fauna', 'soil'],
+                health: 'good',
+                threats: ['weeds', 'erosion'],
+                photos: [],
+                createdAt: '2023-06-15T10:30:00Z'
+            }
+        ];
+    }
+
+    if (db.species.length === 0) {
+        db.species = [
+            {
+                id: Utils.generateId(),
+                siteId: siteId,
+                scientificName: 'Eucalyptus pauciflora',
+                commonName: 'Snow Gum',
+                type: 'flora',
+                status: 'native',
+                description: 'A small to medium-sized tree with smooth bark.',
+                habitat: 'Alpine and subalpine areas',
+                lastObserved: '2023-06-15',
+                image: '',
+                notes: 'Dominant species in Zone 1',
+                createdAt: '2023-01-10T09:20:00Z'
+            }
+        ];
+    }
+
+    if (db.activities.length === 0) {
+        db.activities = [
+            {
+                id: Utils.generateId(),
+                siteId: siteId,
+                type: 'weed-control',
+                title: 'Weed Control - Blackberry',
+                startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                endDate: null,
+                location: 'Zone 3',
+                description: 'Target species: Blackberry.',
+                assignedTo: 'John Smith',
+                priority: 'high',
+                status: 'planned',
+                notes: 'Wear protective clothing',
+                createdAt: new Date().toISOString()
+            }
+        ];
+    }
+
+    if (db.monitoring.length === 0) {
+        db.monitoring = [
+            {
+                id: Utils.generateId(),
+                siteId: siteId,
+                type: 'vegetation-survey',
+                date: '2023-06-15',
+                location: 'Zone 1',
+                observer: 'Jane Doe',
+                findings: 'Increased native cover compared to last survey.',
+                species: [],
+                photos: [],
+                notes: 'Positive trend in vegetation recovery',
+                createdAt: '2023-06-15T16:45:00Z'
+            }
+        ];
+    }
+
+    if (db.reports.length === 0 && siteId) {
+        db.reports = [
+            {
+                id: Utils.generateId(),
+                siteId: siteId,
+                type: 'compliance',
+                date: new Date().toISOString(),
+                generatedBy: 'Jane Doe',
+                period: 'All time',
+                content: {
+                    title: 'Compliance Report',
+                    body: 'Report generated',
+                    progress: 60,
+                    checklist: db.complianceChecklist
+                },
+                format: 'pdf',
+                createdAt: new Date().toISOString()
+            }
+        ];
+    }
+
+    Utils.saveData();
+    console.log('Initial data loaded successfully');
+},
+```
+
+And finally, ensure your App.init() function properly initializes in sequence:
+
+```javascript
+init: function() {
+    console.log('Initializing application...');
+    
+    if (!checkDependencies()) {
+        console.warn('Application running with missing dependencies');
+    }
+    
+    Utils.loadData();
+    SiteManager.initSites();
+    
+    // CRITICAL: Ensure we have a current site
+    if (!db.currentSiteId && db.sites.length > 0) {
+        db.currentSiteId = db.sites[0].id;
+        console.log('Set current site to:', db.currentSiteId);
+    }
+    
+    this.loadInitialData();
+    
+    // Initialize components in sequence
+    setTimeout(() => {
+        try {
+            this.initCharts();
+        } catch(e) { console.error('Chart init error:', e); }
+        
+        try {
+            this.initCalendar();
+        } catch(e) { console.error('Calendar init error:', e); }
+        
+        try {
+            this.populateModalSiteIds();
+        } catch(e) { console.error('Modal init error:', e); }
+        
+        try {
+            this.loadAllData();
+        } catch(e) { console.error('Data load error:', e); }
+        
+        try {
+            this.setupEventListeners();
+        } catch(e) { console.error('Event listener error:', e); }
+        
+        try {
+            this.updateStorageInfo();
+        } catch(e) { console.error('Storage info error:', e); }
+        
+        db.initialized = true;
+        console.log('Application initialized successfully');
+    }, 100);
 }
 ```
 
-This properly cleans up all map-related objects before creating a new map instance.
+After making these changes, clear your browser's localStorage (F12 → Application → Local Storage → Clear) and refresh the page. The app should work properly.
