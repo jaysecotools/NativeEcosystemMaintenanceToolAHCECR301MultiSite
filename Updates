@@ -1,153 +1,55 @@
-That's very helpful - the map worked before, so the JavaScript is still correct, but something in the changes broke it. Since you can't use F12, let me give you the most likely fix.
+Absolutely. Here's a comprehensive prompt you can copy and paste into a new chat, along with your complete code:
 
-Most Likely Problem: The Async Functions
+---
 
-The saveAssessment and saveSpecies functions became async (which is correct), but this sometimes affects how other code loads. The map initialization might be trying to run before everything is ready.
+Prompt for New Chat:
 
-Quick Fix - Add a Map Retry
+```
+I have a complete HTML/JavaScript web application for Native Ecosystem Maintenance (AHCECR301 compliance). The app was working perfectly, but after adding the following upgrades, the Leaflet map no longer loads or displays:
 
-Find the initMap function in your App object (around line 2500-2600). Add a retry mechanism. Replace your existing initMap with this:
+UPGRADES ADDED:
+1. Image persistence - converting images to Base64 with compression (max 800x800px, 70% quality)
+2. 5-photo limit per assessment
+3. Data import functionality (JSON import to complement existing export)
+4. Async/await pattern for saveAssessment and saveSpecies functions
 
-```javascript
-initMap: function(retryCount = 0) {
-    console.log('Initializing map...');
-    
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map element not found');
-        return;
-    }
+SYMPTOMS:
+- Map worked perfectly before these changes
+- No console access available (can't see errors)
+- Map container appears empty or blank
+- Other app features (dashboard, species register, calendar, charts) still work
 
-    // Check if Leaflet is available
-    if (typeof L === 'undefined') {
-        if (retryCount < 5) {
-            console.log('Leaflet not ready, retrying in 500ms...');
-            setTimeout(() => this.initMap(retryCount + 1), 500);
-            return;
-        } else {
-            mapContainer.innerHTML = '<div class="alert alert-warning">Map library failed to load. Please refresh the page.</div>';
-            return;
-        }
-    }
+SUSPECTED ISSUES:
+- Timing/initialization order problem due to async functions
+- Leaflet library loading conflict
+- Map initialization running before DOM or Leaflet is ready
 
-    const siteId = db.currentSiteId;
-    const site = Utils.getCurrentSite();
-    
-    if (!site) {
-        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
-        return;
-    }
-    
-    let mapData = db.siteMaps[siteId];
-    if (!mapData) {
-        mapData = Utils.generateSiteLocation(siteId);
-        db.siteMaps[siteId] = mapData;
-        Utils.saveData();
-    }
-    
-    try {
-        // Clean up existing map
-        if (window.map) {
-            window.map.remove();
-            window.map = null;
-        }
-        
-        // Ensure container has proper dimensions
-        mapContainer.style.height = '500px';
-        mapContainer.style.width = '100%';
-        
-        // Clear any existing content
-        mapContainer.innerHTML = '';
-        
-        // Create new map
-        window.map = L.map('map', {
-            center: mapData.center,
-            zoom: 13,
-            zoomControl: true,
-            fadeAnimation: false,
-            zoomAnimation: false
-        });
+Please provide:
+1. The exact corrected code for the initMap function with retry logic
+2. Any modifications needed to loadAllData or DOMContentLoaded initialization
+3. Proper script loading order verification
+4. Any other fixes needed to restore map functionality while keeping the new features
 
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            maxZoom: 19,
-            detectRetina: true
-        }).addTo(window.map);
-
-        // Add main site marker
-        L.marker(mapData.center).addTo(window.map)
-            .bindPopup(`<b>${Utils.sanitizeHTML(site.name)}</b><br>${Utils.sanitizeHTML(site.location)}`)
-            .openPopup();
-
-        // Create layers
-        this.createMapLayers(mapData);
-        
-        // Initialize editing tools
-        if (typeof MapEditor !== 'undefined' && MapEditor.initEditing) {
-            MapEditor.initEditing();
-        }
-        
-        // Force map to recalculate size
-        setTimeout(() => {
-            if (window.map) {
-                window.map.invalidateSize(true);
-                console.log('Map size invalidated');
-            }
-        }, 250);
-        
-        console.log('Map initialized successfully');
-        
-    } catch (error) {
-        console.error('Error initializing map:', error);
-        mapContainer.innerHTML = '<div class="alert alert-warning">Map could not be loaded. Please refresh the page.</div>';
-    }
-},
+Here is my complete code (paste your entire HTML file here):
 ```
 
-Also Check: The loadAllData Function
+---
 
-Find this function and make sure the map initialization is delayed properly. It should look like this:
+Tips for the new chat:
 
-```javascript
-loadAllData: function() {
-    this.loadDashboard();
-    this.loadAssessments();
-    this.loadSpecies();
-    this.loadActivities();
-    this.loadMonitoring();
-    this.loadReports();
-    this.loadComplianceChecklist();
-    this.loadSettings();
-    this.populateModalSiteIds();
-    
-    if (window.calendar) {
-        try {
-            window.calendar.refetchEvents();
-        } catch (e) {
-            console.error('Error refreshing calendar:', e);
-        }
-    }
-    
-    // Force chart update after data loads
-    setTimeout(() => {
-        this.updateHealthChart();
-    }, 150);
-    
-    // Update map after everything else is loaded
-    setTimeout(() => {
-        this.initMap();
-    }, 300);
-},
-```
+1. Copy your entire HTML file from <!DOCTYPE html> to the very last </html>
+2. Paste it after the prompt above
+3. The AI will be able to see:
+   · Your exact script order
+   · Where Leaflet is loaded
+   · Your async functions
+   · The map initialization code
+   · All your recent upgrades
+4. Include this note at the end of your paste:
+   ```
+   NOTE: The map worked before adding image compression and import features. No console access available for debugging.
+   ```
 
-If That Doesn't Work
+This will give the AI full context to diagnose the exact timing or loading issue specific to your code structure.
 
-Try clearing your browser's cache:
-
-· Chrome/Edge: Ctrl+Shift+Delete → Clear cached images and files
-· Then refresh the page (Ctrl+F5 for hard refresh)
-
-The issue is almost certainly timing-related - the async image functions changed the load order, and the map is trying to initialize before Leaflet is ready. The retry mechanism above should fix it.
-
-Let me know if the map works after making these changes!
+Would you like me to help with anything else before you start the new chat?
