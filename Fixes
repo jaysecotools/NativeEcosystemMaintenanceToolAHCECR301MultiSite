@@ -1,315 +1,238 @@
-I see the issue. The problem is likely that the map container isn't getting proper dimensions or there's a timing issue. Let me provide you with a much simpler, standalone map implementation that's guaranteed to work. Here's a simplified version with just the essential map code:
+Map Display Issue Analysis
+
+I've reviewed your code and found the root cause of the map display problem. The issue is with the map container initialization - the map div has a min-height set but the map container's height isn't being properly respected during the initial render.
+
+The Problem
+
+The map container structure is:
 
 ```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Simple Map Test</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        #map {
-            height: 500px;
-            width: 100%;
-            background-color: #ccc; /* This will show if map fails */
-        }
-    </style>
-</head>
-<body>
+<div class="map-container">
     <div id="map"></div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // Wait for DOM to be fully loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing map...');
-            
-            // Get the map container
-            const mapElement = document.getElementById('map');
-            console.log('Map element:', mapElement);
-            
-            // Check if element exists
-            if (!mapElement) {
-                console.error('Map element not found!');
-                return;
-            }
-            
-            // Check element dimensions
-            console.log('Map dimensions:', {
-                height: mapElement.clientHeight,
-                width: mapElement.clientWidth,
-                offsetHeight: mapElement.offsetHeight,
-                offsetWidth: mapElement.offsetWidth
-            });
-            
-            try {
-                // Create map with explicit options
-                const map = L.map('map', {
-                    center: [-33.4000, 150.3000],
-                    zoom: 13,
-                    zoomControl: true,
-                    fadeAnimation: false, // Disable animations for reliability
-                    zoomAnimation: false
-                });
-                
-                console.log('Map object created:', map);
-                
-                // Add tile layer
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors',
-                    maxZoom: 19,
-                    detectRetina: true
-                }).addTo(map);
-                
-                console.log('Tile layer added');
-                
-                // Add a marker
-                L.marker([-33.4000, 150.3000])
-                    .addTo(map)
-                    .bindPopup('Test marker')
-                    .openPopup();
-                
-                console.log('Marker added');
-                
-                // Force map to recalculate size after a short delay
-                setTimeout(function() {
-                    map.invalidateSize(true);
-                    console.log('Map size invalidated');
-                }, 200);
-                
-            } catch (error) {
-                console.error('Error creating map:', error);
-                mapElement.innerHTML = 'Map error: ' + error.message;
-            }
-        });
-        
-        // Also try after window load
-        window.addEventListener('load', function() {
-            console.log('Window loaded');
-            if (window.map) {
-                window.map.invalidateSize(true);
-            }
-        });
-    </script>
-</body>
-</html>
-```
-
-Now, here's the minimal version integrated into your application. Replace your existing map section and JavaScript with this:
-
-```html
-<!-- Replace your map container div with this -->
-<div class="map-container" role="region" aria-label="Interactive site map">
-    <div id="map" style="height: 500px; width: 100%; background-color: #e9ecef;"></div>
-    
-    <!-- Simple map controls -->
-    <div class="map-controls" role="group" aria-label="Map controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <button id="addPinBtn" class="btn btn-primary btn-sm">
-            <i class="bi bi-pin-angle-fill"></i> Add Pin
-        </button>
-        <button id="removePinBtn" class="btn btn-danger btn-sm">
-            <i class="bi bi-trash"></i> Remove Pin
-        </button>
-    </div>
 </div>
 ```
 
-And here's the simplified JavaScript for just the map functionality:
+When the map initializes, the container may not have a proper height calculated yet. The JavaScript sets:
 
 ```javascript
-// ==================== SIMPLE MAP FUNCTIONS ====================
-const SimpleMap = {
-    map: null,
-    marker: null,
-    sitePins: {},
-
-    initMap: function() {
-        console.log('Initializing simple map...');
-        
-        const mapElement = document.getElementById('map');
-        if (!mapElement) {
-            console.error('Map element not found');
-            return;
-        }
-
-        const site = Utils.getCurrentSite();
-        if (!site) {
-            mapElement.innerHTML = '<div class="alert alert-warning">No site selected.</div>';
-            return;
-        }
-        
-        // Get saved pin or use default
-        let lat = -33.4000;
-        let lng = 150.3000;
-        
-        // Load saved pins
-        try {
-            const savedPins = localStorage.getItem('site_pins');
-            if (savedPins) {
-                this.sitePins = JSON.parse(savedPins);
-                if (this.sitePins[site.id]) {
-                    lat = this.sitePins[site.id].lat;
-                    lng = this.sitePins[site.id].lng;
-                }
-            }
-        } catch (e) {
-            console.error('Error loading pins:', e);
-        }
-
-        try {
-            // Clear existing map
-            if (this.map) {
-                this.map.remove();
-                this.map = null;
-            }
-            
-            // Clear container
-            mapElement.innerHTML = '';
-            
-            // Create map
-            this.map = L.map('map', {
-                center: [lat, lng],
-                zoom: 13,
-                zoomControl: true
-            });
-
-            // Add tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(this.map);
-
-            // Add marker
-            this.marker = L.marker([lat, lng]).addTo(this.map)
-                .bindPopup(`<b>${site.name}</b><br>${site.location}`)
-                .openPopup();
-
-            // Force resize after a short delay
-            setTimeout(() => {
-                if (this.map) {
-                    this.map.invalidateSize(true);
-                    console.log('Map resized');
-                }
-            }, 200);
-
-            console.log('Map initialized successfully');
-
-        } catch (error) {
-            console.error('Map error:', error);
-            mapElement.innerHTML = '<div class="alert alert-danger">Map could not be loaded. Please check your internet connection.</div>';
-        }
-    },
-
-    addPin: function() {
-        const site = Utils.getCurrentSite();
-        if (!site) {
-            alert('No site selected');
-            return;
-        }
-
-        // Get current position
-        const currentPos = this.marker ? this.marker.getLatLng() : { lat: -33.4000, lng: 150.3000 };
-        
-        // Prompt for coordinates (simple approach)
-        const lat = prompt('Enter latitude:', currentPos.lat);
-        if (lat === null) return;
-        
-        const lng = prompt('Enter longitude:', currentPos.lng);
-        if (lng === null) return;
-        
-        const newLat = parseFloat(lat);
-        const newLng = parseFloat(lng);
-        
-        if (isNaN(newLat) || isNaN(newLng)) {
-            alert('Invalid coordinates');
-            return;
-        }
-
-        // Update marker
-        if (this.marker) {
-            this.marker.setLatLng([newLat, newLng]);
-        } else {
-            this.marker = L.marker([newLat, newLng]).addTo(this.map)
-                .bindPopup(`<b>${site.name}</b><br>${site.location}`);
-        }
-        
-        this.map.setView([newLat, newLng], this.map.getZoom());
-
-        // Save pin
-        this.sitePins[site.id] = { lat: newLat, lng: newLng };
-        localStorage.setItem('site_pins', JSON.stringify(this.sitePins));
-        
-        alert('Pin saved successfully');
-    },
-
-    removePin: function() {
-        const site = Utils.getCurrentSite();
-        if (!site) return;
-
-        if (confirm('Remove site pin?')) {
-            if (this.marker) {
-                this.map.removeLayer(this.marker);
-                this.marker = null;
-            }
-            
-            delete this.sitePins[site.id];
-            localStorage.setItem('site_pins', JSON.stringify(this.sitePins));
-            
-            alert('Pin removed');
-        }
-    }
-};
+mapContainer.style.height = '500px';
 ```
 
-If the map is still not showing, here's a diagnostic function you can add to check what's happening:
+But the #map div needs to have its height explicitly set or the container needs to properly manage the height cascade.
 
-```javascript
-function diagnoseMap() {
-    console.log('=== MAP DIAGNOSTICS ===');
-    
-    // Check if Leaflet is loaded
-    console.log('Leaflet loaded:', typeof L !== 'undefined');
-    
-    // Check map element
-    const mapEl = document.getElementById('map');
-    console.log('Map element:', mapEl);
-    
-    if (mapEl) {
-        console.log('Map dimensions:', {
-            height: mapEl.clientHeight,
-            width: mapEl.clientWidth,
-            style: mapEl.style.cssText,
-            computedHeight: window.getComputedStyle(mapEl).height,
-            computedWidth: window.getComputedStyle(mapEl).width
-        });
-    }
-    
-    // Check if map object exists
-    console.log('Map object exists:', !!SimpleMap.map);
-    
-    // Check tile layer
-    if (SimpleMap.map) {
-        console.log('Map center:', SimpleMap.map.getCenter());
-        console.log('Map zoom:', SimpleMap.map.getZoom());
-        console.log('Map size:', SimpleMap.map.getSize());
-    }
-    
-    console.log('=== END DIAGNOSTICS ===');
+The Fix
+
+Here are the key changes needed:
+
+1. CSS Fix (Add this to your <style> section)
+
+```css
+/* Fix map container - ensure proper height cascade */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    min-height: 500px;  /* Add this */
 }
 
-// Call it after map initialization
-setTimeout(diagnoseMap, 1000);
+#map {
+    height: 100% !important;  /* Force height to fill container */
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa;
+    position: relative;  /* Add this */
+    min-height: 500px;  /* Add this */
+    z-index: 1;  /* Add this to ensure proper layering */
+}
 ```
 
-The most common reasons for a grey map are:
+2. JavaScript Fix (Update the initMap function)
 
-1. The map container doesn't have explicit height/width
-2. Leaflet CSS isn't loaded
-3. The map is initialized before the container is ready
-4. There's a JavaScript error preventing initialization
+Replace the map initialization section with:
 
-This simplified version addresses all these issues by:
+```javascript
+initMap: function() {
+    console.log('Starting map initialization...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map container not found');
+        return;
+    }
+    
+    const site = Utils.getCurrentSite();
+    if (!site) {
+        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected</div>';
+        return;
+    }
+    
+    let mapData = db.siteMaps[db.currentSiteId];
+    if (!mapData) {
+        mapData = Utils.generateSiteLocation(db.currentSiteId);
+        db.siteMaps[db.currentSiteId] = mapData;
+    }
+    
+    if (window.map) {
+        try { window.map.remove(); } catch(e) {}
+        window.map = null;
+    }
+    
+    try {
+        // Clear container and set height
+        mapContainer.innerHTML = '';
+        mapContainer.style.height = '500px';
+        mapContainer.style.minHeight = '500px';
+        
+        // Ensure the map div has proper styling
+        mapContainer.style.position = 'relative';
+        
+        // Initialize map with explicit size
+        window.map = L.map('map', {
+            center: mapData.center,
+            zoom: 13,
+            zoomControl: true
+        });
+        
+        // Set map size explicitly
+        window.map.invalidateSize();
+        
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(window.map);
+        
+        // Add site marker
+        L.marker(mapData.center).bindPopup(`<b>${site.name}</b>`).addTo(window.map);
+        
+        // Create map layers
+        this.createMapLayers(mapData);
+        
+        // Force size recalculation after render
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize();
+                console.log('Map size recalculated');
+            }
+        }, 100);
+        
+        // Initialize editing after map is ready
+        setTimeout(() => {
+            MapEditor.initEditing();
+        }, 300);
+        
+        // Recalculate on tab activation
+        const mapTab = document.querySelector('button[data-bs-target="#dashboard"]');
+        if (mapTab) {
+            mapTab.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    if (window.map) window.map.invalidateSize();
+                }, 200);
+            });
+        }
+        
+        console.log('Map loaded successfully');
+        
+    } catch(error) {
+        console.error('Map error:', error);
+        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load: ' + error.message + '</div>';
+    }
+}
+```
 
-· Using explicit inline styles on the map container
-· Loading CSS before JS
-· Waiting for DOMContentLoaded
-· Adding error handling and fallbacks
-· Forcing a resize after initialization
+3. Additional CSS for Map Container Wrapper
+
+Add this to ensure the parent container doesn't collapse:
+
+```css
+/* Ensure map container wrapper maintains height */
+.card-body .map-container {
+    height: 500px;
+    min-height: 500px;
+}
+
+/* Fix for Leaflet container */
+.leaflet-container {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Fix for tab switching */
+.tab-pane .map-container {
+    height: 500px;
+    min-height: 500px;
+}
+```
+
+4. Fix for Map Rendering After Tab Switch
+
+Add this event listener in your setupEventListeners function:
+
+```javascript
+// Force map refresh when dashboard tab is shown
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', (e) => {
+        const target = e.target.getAttribute('data-bs-target');
+        if (target === '#dashboard') {
+            setTimeout(() => {
+                if (window.map) {
+                    window.map.invalidateSize();
+                    console.log('Map refreshed after tab switch');
+                }
+            }, 300);
+        }
+    });
+});
+```
+
+5. For Leaflet's rendering issues, add this CSS:
+
+```css
+/* Leaflet specific fixes */
+.leaflet-tile-pane {
+    z-index: 2;
+}
+
+.leaflet-overlay-pane {
+    z-index: 3;
+}
+
+.leaflet-shadow-pane {
+    z-index: 4;
+}
+
+.leaflet-marker-pane {
+    z-index: 5;
+}
+
+.leaflet-tooltip-pane {
+    z-index: 6;
+}
+
+.leaflet-popup-pane {
+    z-index: 7;
+}
+
+.leaflet-control {
+    z-index: 8;
+}
+```
+
+Why the Map Wasn't Displaying
+
+1. Height Cascade Issue: The #map div wasn't inheriting height from its container properly
+2. Timing Issue: The map was initialized before the container had a computed height
+3. Tab Switching: When switching away from and back to the dashboard tab, the map container lost its size
+4. CSS Conflict: There was a conflict between the container's height and the map's internal height calculation
+
+Testing the Fix
+
+After applying these changes:
+
+1. The map should appear immediately when the page loads
+2. The map should maintain its size when switching tabs
+3. The map should resize properly when the browser window is resized
+
+The key insight is that Leaflet maps need a container with an explicit height, and the #map div needs to fill that container. The invalidateSize() call is crucial after any layout changes.
