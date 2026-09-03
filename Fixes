@@ -1,41 +1,3 @@
-<!-- 
-    Native Ecosystem Maintenance Tool | AHCECR301 Compliance
-    Features: Multi-site management, interactive maps with editing, species register, 
-    maintenance calendar, monitoring surveys, PDF/Excel reports
-    Data stored in browser localStorage - works offline
-    Dependencies: Bootstrap 5, Leaflet, FullCalendar, Chart.js, jsPDF
-    
-    ==================== NEXT STEPS & KNOWN ISSUES ====================
-    
-    TO COMPLETE / FIX:
-    [✓] Create UserGuide.html - link in sidebar currently opens blank tab
-    [ ] Test Leaflet Geoman drawing tools across different browsers (Chrome works best)
-    [✓] Add data import functionality (export exists, import doesn't)
-    [ ] Implement user authentication if moving to multi-user setup
-    
-    ENHANCEMENTS TO CONSIDER:
-    [ ] Add cloud backup/sync option (currently localStorage only)
-    [ ] Add offline support via Service Workers for field work
-    [ ] Add GPS integration for mobile devices
-    [ ] Add email notifications for upcoming maintenance tasks
-    [ ] Add QR code scanning for species/plot identification
-    [ ] Implement data export to CSV in addition to JSON
-    
-    KNOWN MINOR ISSUES:
-    [!] Map may need manual resize when switching sites - refresh or tab switch fixes
-    [!] FullCalendar event refresh can be slow with many activities
-    [!] Print styles need refinement for report layouts
-    
-    TESTING STATUS:
-    [✓] Desktop: Chrome, Firefox, Edge
-    [?] Mobile responsiveness - needs testing on tablets/phones
-    [?] Safari - Leaflet and FullCalendar compatibility unverified
-    
-    ================================================================
--->
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -243,55 +205,71 @@
         .stat-species { background: linear-gradient(135deg, var(--warning-color), #f1c40f); }
         .stat-compliance { background: linear-gradient(135deg, var(--danger-color), #e67e22); }
         
-/* Fix map container */
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-}
-
-#map {
-    height: 100%;
-    width: 100%;
-    border-radius: 8px;
-    background: #f8f9fa; /* Fallback background */
-    min-height: 500px; /* Add this line */
-}
-
-/* Ensure map tiles load */
-.leaflet-tile-container {
-    pointer-events: none;
-}
-
-.leaflet-control-attribution {
-    font-size: 9px;
-    background: rgba(255,255,255,0.8);
-    padding: 2px 5px;
-    border-radius: 3px;
-}
-
-/* Add this missing CSS class */
-.image-thumbnail {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 4px;
-    margin: 5px;
-    border: 2px solid #dee2e6;
-}
+        /* Map Container - FIXED: Single definition */
+        .map-container {
+            height: 500px;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            min-height: 500px;
+        }
         
-.species-image-preview {
-    max-width: 200px;
-    max-height: 200px;
-    margin-top: 10px;
-    display: none;
-    border-radius: 8px;
-    border: 2px solid #dee2e6;
-}
-
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 8px;
+            background: #f8f9fa;
+            position: relative;
+        }
+        
+        /* Leaflet specific fixes */
+        .leaflet-container {
+            height: 100% !important;
+            width: 100% !important;
+        }
+        
+        .tab-pane .map-container {
+            height: 500px;
+            min-height: 500px;
+        }
+        
+        .card-body .map-container {
+            height: 500px;
+            min-height: 500px;
+        }
+        
+        /* Ensure map tiles load */
+        .leaflet-tile-container {
+            pointer-events: none;
+        }
+        
+        .leaflet-control-attribution {
+            font-size: 9px;
+            background: rgba(255,255,255,0.8);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .image-thumbnail {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin: 5px;
+            border: 2px solid #dee2e6;
+        }
+        
+        .species-image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            margin-top: 10px;
+            display: none;
+            border-radius: 8px;
+            border: 2px solid #dee2e6;
+        }
+        
         .map-controls {
             position: absolute;
             top: 10px;
@@ -573,74 +551,6 @@
         .fade-in {
             animation: fadeIn 0.3s ease;
         }
-
-/* Fix map container - ensure proper height cascade */
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-    min-height: 500px;  /* Add this */
-}
-
-#map {
-    height: 100% !important;  /* Force height to fill container */
-    width: 100%;
-    border-radius: 8px;
-    background: #f8f9fa;
-    position: relative;  /* Add this */
-    min-height: 500px;  /* Add this */
-    z-index: 1;  /* Add this to ensure proper layering */
-}
-
-/* Ensure map container wrapper maintains height */
-.card-body .map-container {
-    height: 500px;
-    min-height: 500px;
-}
-
-/* Fix for Leaflet container */
-.leaflet-container {
-    height: 100% !important;
-    width: 100% !important;
-}
-
-/* Fix for tab switching */
-.tab-pane .map-container {
-    height: 500px;
-    min-height: 500px;
-}
-
-/* Leaflet specific fixes */
-.leaflet-tile-pane {
-    z-index: 2;
-}
-
-.leaflet-overlay-pane {
-    z-index: 3;
-}
-
-.leaflet-shadow-pane {
-    z-index: 4;
-}
-
-.leaflet-marker-pane {
-    z-index: 5;
-}
-
-.leaflet-tooltip-pane {
-    z-index: 6;
-}
-
-.leaflet-popup-pane {
-    z-index: 7;
-}
-
-.leaflet-control {
-    z-index: 8;
-}
     </style>
 </head>
 
@@ -1780,28 +1690,27 @@
                                             Data Management
                                         </h5>
                                         
-<div class="d-grid gap-2">
-    <button class="btn btn-outline-secondary" id="exportAllDataBtn">
-        <i class="bi bi-download me-2" aria-hidden="true"></i>
-        Export All Data
-    </button>
-    
-    <button class="btn btn-outline-primary" id="importDataBtn">
-        <i class="bi bi-upload me-2" aria-hidden="true"></i>
-        Import Data (JSON)
-    </button>
-    
-    <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
-        <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
-        Backup Database
-    </button>
-    
-    <button class="btn btn-outline-danger" id="resetTestDataBtn">
-        <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
-        Reset Test Data
-    </button>
-</div>
-
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-outline-secondary" id="exportAllDataBtn">
+                                                <i class="bi bi-download me-2" aria-hidden="true"></i>
+                                                Export All Data
+                                            </button>
+                                            
+                                            <button class="btn btn-outline-primary" id="importDataBtn">
+                                                <i class="bi bi-upload me-2" aria-hidden="true"></i>
+                                                Import Data (JSON)
+                                            </button>
+                                            
+                                            <button class="btn btn-outline-secondary" id="backupDatabaseBtn">
+                                                <i class="bi bi-hdd-stack me-2" aria-hidden="true"></i>
+                                                Backup Database
+                                            </button>
+                                            
+                                            <button class="btn btn-outline-danger" id="resetTestDataBtn">
+                                                <i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>
+                                                Reset Test Data
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -5112,92 +5021,74 @@
                     }
                 },
 
-initMap: function() {
-    console.log('Starting map initialization...');
-    
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map container not found');
-        return;
-    }
-    
-    const site = Utils.getCurrentSite();
-    if (!site) {
-        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected</div>';
-        return;
-    }
-    
-    let mapData = db.siteMaps[db.currentSiteId];
-    if (!mapData) {
-        mapData = Utils.generateSiteLocation(db.currentSiteId);
-        db.siteMaps[db.currentSiteId] = mapData;
-    }
-    
-    if (window.map) {
-        try { window.map.remove(); } catch(e) {}
-        window.map = null;
-    }
-    
-    try {
-        // Clear container and set height
-        mapContainer.innerHTML = '';
-        mapContainer.style.height = '500px';
-        mapContainer.style.minHeight = '500px';
-        
-        // Ensure the map div has proper styling
-        mapContainer.style.position = 'relative';
-        
-        // Initialize map with explicit size
-        window.map = L.map('map', {
-            center: mapData.center,
-            zoom: 13,
-            zoomControl: true
-        });
-        
-        // Set map size explicitly
-        window.map.invalidateSize();
-        
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(window.map);
-        
-        // Add site marker
-        L.marker(mapData.center).bindPopup(`<b>${site.name}</b>`).addTo(window.map);
-        
-        // Create map layers
-        this.createMapLayers(mapData);
-        
-        // Force size recalculation after render
-        setTimeout(() => {
-            if (window.map) {
-                window.map.invalidateSize();
-                console.log('Map size recalculated');
-            }
-        }, 100);
-        
-        // Initialize editing after map is ready
-        setTimeout(() => {
-            MapEditor.initEditing();
-        }, 300);
-        
-        // Recalculate on tab activation
-        const mapTab = document.querySelector('button[data-bs-target="#dashboard"]');
-        if (mapTab) {
-            mapTab.addEventListener('shown.bs.tab', () => {
-                setTimeout(() => {
-                    if (window.map) window.map.invalidateSize();
-                }, 200);
-            });
-        }
-        
-        console.log('Map loaded successfully');
-        
-    } catch(error) {
-        console.error('Map error:', error);
-        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load: ' + error.message + '</div>';
-    }
-}
+                initMap: function() {
+                    console.log('Starting map initialization...');
+                    
+                    const mapContainer = document.getElementById('map');
+                    if (!mapContainer) {
+                        console.error('Map container not found');
+                        return;
+                    }
+                    
+                    const site = Utils.getCurrentSite();
+                    if (!site) {
+                        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected</div>';
+                        return;
+                    }
+                    
+                    let mapData = db.siteMaps[db.currentSiteId];
+                    if (!mapData) {
+                        mapData = Utils.generateSiteLocation(db.currentSiteId);
+                        db.siteMaps[db.currentSiteId] = mapData;
+                    }
+                    
+                    if (window.map) {
+                        try { window.map.remove(); } catch(e) {}
+                        window.map = null;
+                    }
+                    
+                    try {
+                        // Clear container - let CSS handle the sizing
+                        mapContainer.innerHTML = '';
+                        
+                        // Initialize map
+                        window.map = L.map('map', {
+                            center: mapData.center,
+                            zoom: 13,
+                            zoomControl: true
+                        });
+                        
+                        // Add tile layer
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap'
+                        }).addTo(window.map);
+                        
+                        // Force size calculation after render
+                        setTimeout(() => {
+                            if (window.map) {
+                                window.map.invalidateSize();
+                                console.log('Map size initialized');
+                            }
+                        }, 100);
+                        
+                        // Add site marker
+                        L.marker(mapData.center).bindPopup(`<b>${site.name}</b>`).addTo(window.map);
+                        
+                        // Create map layers
+                        this.createMapLayers(mapData);
+                        
+                        // Initialize editing
+                        setTimeout(() => {
+                            MapEditor.initEditing();
+                        }, 300);
+                        
+                        console.log('Map loaded successfully');
+                        
+                    } catch(error) {
+                        console.error('Map error:', error);
+                        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load: ' + error.message + '</div>';
+                    }
+                },
 
                 createMapLayers: function(mapData) {
                     if (!mapData) return;
@@ -5498,7 +5389,7 @@ initMap: function() {
                                             Create First Assessment
                                         </button>
                                     </div>
-				</td>
+                                </td>
                             </tr>
                         `;
                     } else {
@@ -7466,29 +7357,19 @@ initMap: function() {
                         }
                     });
 
-// Force map refresh when dashboard tab is shown
-document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-    tab.addEventListener('shown.bs.tab', (e) => {
-        const target = e.target.getAttribute('data-bs-target');
-        if (target === '#dashboard') {
-            setTimeout(() => {
-                if (window.map) {
-                    window.map.invalidateSize();
-                    console.log('Map refreshed after tab switch');
-                }
-            }, 300);
-        }
-    });
-});
-
+                    // SINGLE tab change listener - FIXED: Removed duplicate
                     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
                         tab.addEventListener('shown.bs.tab', (e) => {
                             const target = e.target.getAttribute('data-bs-target');
                             
+                            // Map refresh for dashboard tab
                             if (target === '#dashboard') {
                                 this.loadDashboard();
                                 setTimeout(() => {
-                                    if (window.map) window.map.invalidateSize();
+                                    if (window.map) {
+                                        window.map.invalidateSize();
+                                        console.log('Map refreshed after tab switch');
+                                    }
                                 }, 300);
                             } else if (target === '#site-assessment') {
                                 this.loadAssessments();
@@ -7666,6 +7547,4 @@ document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
         })();
     </script>
 </body>
-</html>
-</body> 
 </html>
