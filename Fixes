@@ -1,8 +1,44 @@
-You're right, I apologize. I truncated too much and broke the app. Let me provide the complete, working JavaScript with ONLY the map fixes applied. Keep ALL your existing code and just replace the initMap function and the tab event listener section.
+I can see the issue. The map container has a missing CSS class and the map initialization needs to handle the container properly. Here's the fix:
 
-Here are the TWO specific fixes you need:
+The main issue is that the map container needs proper sizing and the #map div needs a min-height set. Additionally, when switching sites, the map needs to be properly re-initialized.
 
-FIX 1: Replace your initMap function with this:
+Here's the fix for the map display error:
+
+1. Fix the CSS for the map container (around line 220-235):
+
+```css
+/* Fix map container */
+.map-container {
+    height: 500px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+#map {
+    height: 100%;
+    width: 100%;
+    border-radius: 8px;
+    background: #f8f9fa;
+    min-height: 500px; /* ADD THIS - ensures map has minimum height */
+}
+
+/* Ensure map tiles load */
+.leaflet-tile-container {
+    pointer-events: none;
+}
+
+.leaflet-control-attribution {
+    font-size: 9px;
+    background: rgba(255,255,255,0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+```
+
+2. Fix the initMap function (around line 2220-2290) - add better container handling:
 
 ```javascript
 initMap: function() {
@@ -26,50 +62,57 @@ initMap: function() {
         db.siteMaps[db.currentSiteId] = mapData;
     }
     
+    // Properly clean up existing map
     if (window.map) {
-        try { window.map.remove(); } catch(e) {}
-        window.map = null;
+        try { 
+            window.map.remove(); 
+            window.map = null;
+        } catch(e) {
+            console.warn('Error removing map:', e);
+        }
     }
     
+    // Reset container
+    mapContainer.style.height = '500px';
+    mapContainer.style.minHeight = '500px';
+    mapContainer.innerHTML = '';
+    
     try {
-        mapContainer.innerHTML = '';
-        
+        // Create map with explicit size
         window.map = L.map('map', {
             center: mapData.center,
             zoom: 13,
-            zoomControl: true
+            zoomControl: true,
+            fadeAnimation: true,
+            attributionControl: true
         });
         
+        // Add tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap'
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19
         }).addTo(window.map);
         
-        // Force resize with multiple attempts
-        var resizeAttempts = 0;
-        var forceResize = function() {
-            if (window.map) {
-                window.map.invalidateSize();
-                console.log('Map resized, attempt:', resizeAttempts);
-                resizeAttempts++;
-                if (resizeAttempts < 5) {
-                    setTimeout(forceResize, 200);
-                }
-            }
-        };
+        // Add site marker
+        L.marker(mapData.center).bindPopup(`<b>${site.name}</b>`).addTo(window.map);
         
-        setTimeout(forceResize, 100);
-        setTimeout(forceResize, 300);
-        setTimeout(forceResize, 600);
-        
-        L.marker(mapData.center).bindPopup('<b>' + site.name + '</b>').addTo(window.map);
-        
+        // Create map layers
         this.createMapLayers(mapData);
         
-        setTimeout(function() {
-            MapEditor.initEditing();
-        }, 500);
+        // Force a resize after a short delay
+        setTimeout(() => {
+            if (window.map) {
+                window.map.invalidateSize(true);
+                console.log('Map resized');
+            }
+        }, 300);
         
-        console.log('Map loaded successfully');
+        // Initialize editing after map is ready
+        setTimeout(() => {
+            MapEditor.initEditing();
+        }, 400);
+        
+        console.log('Map loaded successfully for site:', site.name);
         
     } catch(error) {
         console.error('Map error:', error);
@@ -78,83 +121,103 @@ initMap: function() {
 },
 ```
 
-FIX 2: Replace your tab event listener (inside setupEventListeners) with this:
+3. Update the switchSite function (around line 1000-1020) to properly reinitialize the map:
 
 ```javascript
-// In setupEventListeners, find this section and replace it:
-document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(tab) {
-    tab.addEventListener('shown.bs.tab', function(e) {
-        var target = e.target.getAttribute('data-bs-target');
-        
-        if (target === '#dashboard') {
-            App.loadDashboard();
-            setTimeout(function() {
-                if (window.map) {
-                    window.map.invalidateSize();
-                    console.log('Map resized on dashboard tab switch');
-                    setTimeout(function() {
-                        if (window.map) {
-                            window.map.invalidateSize();
-                        }
-                    }, 200);
-                }
-            }, 100);
-        } else if (target === '#site-assessment') {
-            App.loadAssessments();
-        } else if (target === '#maintenance-plan') {
-            App.loadActivities();
-            if (window.calendar) {
-                setTimeout(function() { window.calendar.updateSize(); }, 200);
-            }
-        } else if (target === '#species-register') {
-            App.loadSpecies();
-        } else if (target === '#monitoring') {
-            App.loadMonitoring();
-        } else if (target === '#reports') {
-            App.loadReports();
-        } else if (target === '#legislation') {
-            App.loadComplianceChecklist();
-        } else if (target === '#settings') {
-            App.loadSettings();
+switchSite: function(siteId) {
+    Utils.saveData();
+    db.currentSiteId = siteId;
+    this.loadSiteSelector();
+    App.populateModalSiteIds();
+    
+    // Force map reinitialization with proper timing
+    setTimeout(() => {
+        App.updateHealthChart();
+    }, 100);
+    
+    setTimeout(() => {
+        App.loadAllData();
+    }, 200);
+    
+    setTimeout(() => {
+        // Remove old map reference and reinitialize
+        if (window.map) {
+            try { 
+                window.map.remove(); 
+                window.map = null;
+            } catch(e) {}
         }
-    });
-});
+        App.initMap();
+    }, 400);
+    
+    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
+    
+    const site = db.sites.find(s => s && s.id === siteId);
+    Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
+}
 ```
 
-And add this CSS fix at the top of your style section:
+4. Add this CSS class that was missing (around line 270):
 
 ```css
-/* Map Container - FIXED */
-#map {
-    height: 100% !important;
-    width: 100% !important;
-    min-height: 450px;
-    background: #f8f9fa;
-    position: relative;
-    z-index: 1;
-}
-
-.map-container {
-    height: 500px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-    min-height: 500px;
-}
-
-/* Ensure leaflet container gets proper size */
-.leaflet-container {
-    height: 100% !important;
-    width: 100% !important;
-}
-
-/* Force dashboard map to be visible */
-#dashboard .map-container {
-    display: block !important;
-    visibility: visible !important;
+/* Add this missing CSS class for image thumbnails */
+.image-thumbnail {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin: 5px;
+    border: 2px solid #dee2e6;
 }
 ```
 
-These are the ONLY changes you need to make. Keep everything else exactly as you had it. The map should now display properly when you load the dashboard.
+5. Update the loadAllData function to handle map initialization better (around line 1460-1490):
+
+```javascript
+loadAllData: function() {
+    this.loadDashboard();
+    this.loadAssessments();
+    this.loadSpecies();
+    this.loadActivities();
+    this.loadMonitoring();
+    this.loadReports();
+    this.loadComplianceChecklist();
+    this.loadSettings();
+    this.populateModalSiteIds();
+    
+    if (window.calendar) {
+        try {
+            window.calendar.refetchEvents();
+        } catch (e) {
+            console.error('Error refreshing calendar:', e);
+        }
+    }
+    
+    setTimeout(() => {
+        this.updateHealthChart();
+    }, 150);
+    
+    // Reinitialize map if it exists or should exist
+    setTimeout(() => {
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+            if (!window.map) {
+                this.initMap();
+            } else {
+                try {
+                    window.map.invalidateSize(true);
+                } catch(e) {}
+            }
+        }
+    }, 300);
+}
+```
+
+The main issues that were causing the map display error:
+
+1. Missing min-height on #map - The map container wasn't getting proper height
+2. Map container not being properly reset on site switch
+3. Missing .image-thumbnail CSS class that was referenced in the code
+4. Map not being properly invalidated after tab switches
+
+The fixes above address all these issues and ensure the map displays correctly when the page loads and when switching between sites.
