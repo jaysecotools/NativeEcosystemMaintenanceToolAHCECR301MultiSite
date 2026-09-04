@@ -1,970 +1,3 @@
-CAN YOU PLEASE FILL IN THE BLANKS IN THIS CODE:
-<script>
-        (function() {
-            'use strict';
-
-            // ==================== CONSTANTS ====================
-            const STORAGE_KEYS = {
-                ASSESSMENTS: 'ecosystem_assessments',
-                SPECIES: 'ecosystem_species',
-                ACTIVITIES: 'ecosystem_activities',
-                MONITORING: 'ecosystem_monitoring',
-                REPORTS: 'ecosystem_reports',
-                FAUNA_SIGHTINGS: 'ecosystem_fauna_sightings',
-                VEGETATION_SURVEYS: 'ecosystem_vegetation_surveys',
-                COMPLIANCE: 'ecosystem_compliance',
-                SETTINGS: 'ecosystem_settings',
-                SITES: 'ecosystem_sites',
-                SITE_MAPS: 'ecosystem_site_maps',
-                MAP_FEATURES: 'ecosystem_map_features'
-            };
-
-            // ==================== DEPENDENCY CHECK ====================
-            var checkDependencies = function() {
-                var missingDeps = [];
-                
-                if (typeof bootstrap === 'undefined') missingDeps.push('Bootstrap');
-                if (typeof L === 'undefined') missingDeps.push('Leaflet');
-                if (typeof Chart === 'undefined') missingDeps.push('Chart.js');
-                if (typeof FullCalendar === 'undefined') missingDeps.push('FullCalendar');
-                
-                if (missingDeps.length > 0) {
-                    console.error('Missing dependencies:', missingDeps.join(', '));
-                    var alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-danger m-3';
-                    alertDiv.innerHTML = '<strong>Error:</strong> Missing required libraries: ' + missingDeps.join(', ') + '. Please check your internet connection and reload.';
-                    document.body.prepend(alertDiv);
-                    return false;
-                }
-                return true;
-            };
-
-            // ==================== INITIAL DATA ====================
-            var db = {
-                assessments: [],
-                species: [],
-                activities: [],
-                monitoring: [],
-                reports: [],
-                faunaSightings: [],
-                vegetationSurveys: [],
-                complianceChecklist: [
-                    { id: 1, requirement: "Identified all relevant legislation", compliant: "", evidence: "", notes: "" },
-                    { id: 2, requirement: "Assessed impacts on protected matters", compliant: "", evidence: "", notes: "" },
-                    { id: 3, requirement: "Obtained necessary permits/approvals", compliant: "", evidence: "", notes: "" },
-                    { id: 4, requirement: "Implemented required protections", compliant: "", evidence: "", notes: "" },
-                    { id: 5, requirement: "Maintained required records", compliant: "", evidence: "", notes: "" }
-                ],
-                sites: [],
-                siteMaps: {},
-                mapFeatures: {},
-                settings: {
-                    userProfile: {
-                        name: "John Doe",
-                        email: "john.doe@example.com",
-                        role: "ecologist"
-                    }
-                },
-                currentSiteId: null,
-                editMode: false,
-                initialized: false
-            };
-
-            // ==================== UTILITY FUNCTIONS ====================
-            var Utils = {
-                parseJSON: function(key, defaultValue) {
-                    try {
-                        var item = localStorage.getItem(key);
-                        return item ? JSON.parse(item) : defaultValue;
-                    } catch (e) {
-                        console.error('Error parsing ' + key + ':', e);
-                        return defaultValue;
-                    }
-                },
-
-                saveData: function() {
-                    try {
-                        localStorage.setItem(STORAGE_KEYS.ASSESSMENTS, JSON.stringify(db.assessments));
-                        localStorage.setItem(STORAGE_KEYS.SPECIES, JSON.stringify(db.species));
-                        localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(db.activities));
-                        localStorage.setItem(STORAGE_KEYS.MONITORING, JSON.stringify(db.monitoring));
-                        localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(db.reports));
-                        localStorage.setItem(STORAGE_KEYS.FAUNA_SIGHTINGS, JSON.stringify(db.faunaSightings));
-                        localStorage.setItem(STORAGE_KEYS.VEGETATION_SURVEYS, JSON.stringify(db.vegetationSurveys));
-                        localStorage.setItem(STORAGE_KEYS.COMPLIANCE, JSON.stringify(db.complianceChecklist));
-                        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(db.settings));
-                        localStorage.setItem(STORAGE_KEYS.SITES, JSON.stringify(db.sites));
-                        localStorage.setItem(STORAGE_KEYS.SITE_MAPS, JSON.stringify(db.siteMaps));
-                        localStorage.setItem(STORAGE_KEYS.MAP_FEATURES, JSON.stringify(db.mapFeatures));
-                        return true;
-                    } catch (e) {
-                        console.error('Error saving data:', e);
-                        this.showToast('Error', 'Failed to save data. Storage may be full.', 'error');
-                        return false;
-                    }
-                },
-
-                loadData: function() {
-                    db.assessments = this.parseJSON(STORAGE_KEYS.ASSESSMENTS, []);
-                    db.species = this.parseJSON(STORAGE_KEYS.SPECIES, []);
-                    db.activities = this.parseJSON(STORAGE_KEYS.ACTIVITIES, []);
-                    db.monitoring = this.parseJSON(STORAGE_KEYS.MONITORING, []);
-                    db.reports = this.parseJSON(STORAGE_KEYS.REPORTS, []);
-                    db.faunaSightings = this.parseJSON(STORAGE_KEYS.FAUNA_SIGHTINGS, []);
-                    db.vegetationSurveys = this.parseJSON(STORAGE_KEYS.VEGETATION_SURVEYS, []);
-                    db.complianceChecklist = this.parseJSON(STORAGE_KEYS.COMPLIANCE, db.complianceChecklist);
-                    db.settings = this.parseJSON(STORAGE_KEYS.SETTINGS, db.settings);
-                    db.sites = this.parseJSON(STORAGE_KEYS.SITES, []);
-                    db.siteMaps = this.parseJSON(STORAGE_KEYS.SITE_MAPS, {});
-                    db.mapFeatures = this.parseJSON(STORAGE_KEYS.MAP_FEATURES, {});
-                    
-                    db.sites.forEach(function(site) {
-                        if (site && !db.mapFeatures[site.id]) {
-                            db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
-                        }
-                    });
-                },
-
-                // ... (keep all your existing utility functions here - they're unchanged)
-
-                generateId: function() {
-                    return Date.now() + Math.floor(Math.random() * 1000);
-                },
-
-                filterByCurrentSite: function(data) {
-                    if (!db.currentSiteId || !data) return [];
-                    return data.filter(function(item) { return item && item.siteId === db.currentSiteId; });
-                },
-
-                getCurrentSite: function() {
-                    return db.sites.find(function(site) { return site && site.id === db.currentSiteId; });
-                },
-
-                generateSiteLocation: function(siteId) {
-                    var baseLat = -33.4000;
-                    var baseLng = 150.3000;
-                    
-                    var idNum = typeof siteId === 'number' ? siteId : 
-                                 (typeof siteId === 'string' ? parseInt(siteId) || 0 : 0);
-                    
-                    var latOffset = (idNum % 10) * 0.05;
-                    var lngOffset = Math.floor(idNum / 10) % 10 * 0.05;
-                    
-                    return {
-                        center: [baseLat + latOffset, baseLng + lngOffset],
-                        zones: [
-                            {
-                                name: 'Zone 1 - Native Forest',
-                                coords: [
-                                    [baseLat - 0.01 + latOffset, baseLng - 0.01 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                                    [baseLat + 0.01 + latOffset, baseLng + 0.01 + lngOffset],
-                                    [baseLat + 0.01 + latOffset, baseLng - 0.01 + lngOffset]
-                                ],
-                                color: '#3498db'
-                            },
-                            {
-                                name: 'Zone 2 - Wetland Area',
-                                coords: [
-                                    [baseLat + 0.02 + latOffset, baseLng - 0.015 + lngOffset],
-                                    [baseLat + 0.02 + latOffset, baseLng + 0.005 + lngOffset],
-                                    [baseLat + 0.04 + latOffset, baseLng + 0.005 + lngOffset],
-                                    [baseLat + 0.04 + latOffset, baseLng - 0.015 + lngOffset]
-                                ],
-                                color: '#27ae60'
-                            },
-                            {
-                                name: 'Zone 3 - Weed Control Area',
-                                coords: [
-                                    [baseLat - 0.03 + latOffset, baseLng + 0.02 + lngOffset],
-                                    [baseLat - 0.03 + latOffset, baseLng + 0.04 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.04 + lngOffset],
-                                    [baseLat - 0.01 + latOffset, baseLng + 0.02 + lngOffset]
-                                ],
-                                color: '#e74c3c'
-                            }
-                        ],
-                        vegetationMarkers: [
-                            { name: 'Eucalyptus pauciflora (Snow Gum)', coords: [baseLat - 0.005 + latOffset, baseLng + lngOffset] },
-                            { name: 'Acacia melanoxylon (Blackwood)', coords: [baseLat - 0.004 + latOffset, baseLng + 0.002 + lngOffset] },
-                            { name: 'Banksia marginata (Silver Banksia)', coords: [baseLat - 0.006 + latOffset, baseLng - 0.001 + lngOffset] }
-                        ],
-                        weedMarkers: [
-                            { name: 'Rubus fruticosus (Blackberry)', coords: [baseLat - 0.025 + latOffset, baseLng + 0.025 + lngOffset] },
-                            { name: 'Lantana camara (Lantana)', coords: [baseLat - 0.024 + latOffset, baseLng + 0.027 + lngOffset] },
-                            { name: 'Ulex europaeus (Gorse)', coords: [baseLat - 0.026 + latOffset, baseLng + 0.026 + lngOffset] }
-                        ]
-                    };
-                },
-
-                getSiteHealthData: function(siteId) {
-                    if (!siteId) return this.getDefaultHealthData();
-                    
-                    var siteAssessments = db.assessments.filter(function(a) { return a && a.siteId === siteId; });
-                    
-                    var healthData = {
-                        biodiversity: 78,
-                        nativeCover: 65,
-                        weedPressure: 22,
-                        erosion: 15,
-                        faunaActivity: 70,
-                        waterQuality: 85,
-                        previousBiodiversity: 72,
-                        previousNativeCover: 60,
-                        previousWeedPressure: 28,
-                        previousErosion: 18,
-                        previousFaunaActivity: 65,
-                        previousWaterQuality: 80
-                    };
-                    
-                    if (siteAssessments.length > 0) {
-                        var sorted = siteAssessments.slice().sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
-                        var latest = sorted[0];
-                        var previous = sorted[1] || sorted[0];
-                        
-                        var healthScore = function(health) {
-                            switch(health) {
-                                case 'excellent': return 90;
-                                case 'good': return 75;
-                                case 'fair': return 55;
-                                case 'poor': return 30;
-                                case 'degraded': return 15;
-                                default: return 50;
-                            }
-                        };
-                        
-                        var latestScore = healthScore(latest.health);
-                        var previousScore = healthScore(previous.health);
-                        
-                        healthData = {
-                            biodiversity: latestScore,
-                            nativeCover: latestScore - (latest.threats && latest.threats.indexOf('weeds') !== -1 ? 10 : 0),
-                            weedPressure: 100 - latestScore + (latest.threats && latest.threats.indexOf('weeds') !== -1 ? 20 : 10),
-                            erosion: latest.threats && latest.threats.indexOf('erosion') !== -1 ? 40 : 15,
-                            faunaActivity: latestScore - 5,
-                            waterQuality: latest.components && latest.components.indexOf('water') !== -1 ? latestScore : 70,
-                            previousBiodiversity: previousScore,
-                            previousNativeCover: previousScore - (previous.threats && previous.threats.indexOf('weeds') !== -1 ? 10 : 0),
-                            previousWeedPressure: 100 - previousScore + (previous.threats && previous.threats.indexOf('weeds') !== -1 ? 20 : 10),
-                            previousErosion: previous.threats && previous.threats.indexOf('erosion') !== -1 ? 40 : 15,
-                            previousFaunaActivity: previousScore - 5,
-                            previousWaterQuality: previous.components && previous.components.indexOf('water') !== -1 ? previousScore : 70
-                        };
-                        
-                        Object.keys(healthData).forEach(function(key) {
-                            healthData[key] = Math.min(100, Math.max(0, healthData[key]));
-                        });
-                    }
-                    
-                    return healthData;
-                },
-
-                getDefaultHealthData: function() {
-                    return {
-                        biodiversity: 78,
-                        nativeCover: 65,
-                        weedPressure: 22,
-                        erosion: 15,
-                        faunaActivity: 70,
-                        waterQuality: 85,
-                        previousBiodiversity: 72,
-                        previousNativeCover: 60,
-                        previousWeedPressure: 28,
-                        previousErosion: 18,
-                        previousFaunaActivity: 65,
-                        previousWaterQuality: 80
-                    };
-                }
-            };
-
-            // ==================== SIMPLIFIED MAP EDITOR ====================
-            var MapEditor = {
-                initEditing: function() {
-                    console.log('MapEditor.initEditing called');
-                    if (!window.map) {
-                        console.error('Map not initialized for editing');
-                        return;
-                    }
-
-                    if (typeof window.map.pm === 'undefined') {
-                        console.warn('Leaflet Geoman not available');
-                        return;
-                    }
-
-                    try {
-                        window.map.pm.addControls({
-                            position: 'topleft',
-                            drawMarker: true,
-                            drawPolygon: true,
-                            drawPolyline: true,
-                            drawCircle: true,
-                            drawRectangle: true,
-                            editMode: true,
-                            dragMode: true,
-                            cutPolygon: true,
-                            removalMode: true
-                        });
-
-                        window.map.pm.setLang('en');
-                        window.map.pm.setGlobalOptions({
-                            snappable: false,
-                            allowSelfIntersection: false
-                        });
-
-                        console.log('Map editing initialized successfully');
-                    } catch (e) {
-                        console.error('Error initializing map editing:', e);
-                    }
-                },
-
-                // Simplified - just load basic features
-                loadFeaturesForCurrentSite: function() {
-                    console.log('Loading map features');
-                    // Minimal implementation for now
-                },
-
-                toggleEditMode: function() {
-                    db.editMode = !db.editMode;
-                    var editModeBtn = document.getElementById('editModeBtn');
-                    if (editModeBtn) {
-                        if (db.editMode) {
-                            editModeBtn.classList.add('active', 'btn-warning');
-                            editModeBtn.classList.remove('btn-outline-warning');
-                            editModeBtn.innerHTML = '<i class="bi bi-pencil-square"></i> Exit Edit Mode';
-                        } else {
-                            editModeBtn.classList.remove('active', 'btn-warning');
-                            editModeBtn.classList.add('btn-outline-warning');
-                            editModeBtn.innerHTML = '<i class="bi bi-pencil-square"></i> Edit Mode';
-                        }
-                    }
-                    Utils.showToast('Info', db.editMode ? 'Edit mode enabled' : 'Edit mode disabled', 'info');
-                },
-
-                saveMap: function() {
-                    if (Utils.saveData()) {
-                        Utils.showToast('Success', 'Map saved successfully');
-                    }
-                },
-
-                clearMap: function() {
-                    Utils.showConfirmation('Clear Map', 'Clear all custom map features?', function() {
-                        if (db.currentSiteId) {
-                            db.mapFeatures[db.currentSiteId] = { zones: [], vegetation: [], weeds: [], points: [] };
-                            Utils.saveData();
-                            Utils.showToast('Success', 'Map cleared');
-                        }
-                    });
-                }
-            };
-
-            // ==================== SITE MANAGEMENT ====================
-            var SiteManager = {
-                initSites: function() {
-                    console.log('SiteManager.initSites called');
-                    if (db.sites.length === 0) {
-                        var defaultSite = {
-                            id: Utils.generateId(),
-                            name: "Blue Mountains Conservation Area",
-                            location: "NSW, Australia",
-                            area: 125,
-                            description: "Mixed eucalypt forest with significant biodiversity values.",
-                            createdAt: new Date().toISOString()
-                        };
-                        db.sites.push(defaultSite);
-                        db.siteMaps[defaultSite.id] = Utils.generateSiteLocation(defaultSite.id);
-                        db.mapFeatures[defaultSite.id] = { zones: [], vegetation: [], weeds: [], points: [] };
-                        db.currentSiteId = defaultSite.id;
-                    } else if (db.sites.length > 0 && !db.currentSiteId) {
-                        db.currentSiteId = db.sites[0].id;
-                    }
-                    
-                    db.sites.forEach(function(site) {
-                        if (site) {
-                            if (!db.siteMaps[site.id]) {
-                                db.siteMaps[site.id] = Utils.generateSiteLocation(site.id);
-                            }
-                            if (!db.mapFeatures[site.id]) {
-                                db.mapFeatures[site.id] = { zones: [], vegetation: [], weeds: [], points: [] };
-                            }
-                        }
-                    });
-                    
-                    this.loadSiteSelector();
-                },
-
-                loadSiteSelector: function() {
-                    var selector = document.getElementById('siteSelector');
-                    var currentSiteName = document.getElementById('currentSiteName');
-                    
-                    if (!selector) return;
-                    
-                    selector.innerHTML = '';
-                    
-                    if (db.sites.length === 0) {
-                        selector.innerHTML = '<option value="">No sites</option>';
-                        if (currentSiteName) currentSiteName.textContent = 'No site selected';
-                        return;
-                    }
-                    
-                    db.sites.forEach(function(site) {
-                        if (site) {
-                            var option = document.createElement('option');
-                            option.value = site.id;
-                            option.textContent = site.name;
-                            if (site.id === db.currentSiteId) {
-                                option.selected = true;
-                                if (currentSiteName) currentSiteName.textContent = site.name;
-                                
-                                document.querySelectorAll('.site-badge').forEach(function(badge) {
-                                    badge.textContent = site.name;
-                                });
-                                
-                                var dashboardSiteName = document.getElementById('dashboardSiteName');
-                                if (dashboardSiteName) dashboardSiteName.textContent = site.name;
-                            }
-                            selector.appendChild(option);
-                        }
-                    });
-                },
-
-                switchSite: function(siteId) {
-                    Utils.saveData();
-                    db.currentSiteId = siteId;
-                    this.loadSiteSelector();
-                    
-                    // Force map reload
-                    if (window.map) {
-                        try { 
-                            window.map.remove(); 
-                            window.map = null;
-                        } catch(e) {}
-                    }
-                    
-                    setTimeout(function() {
-                        App.initMap();
-                    }, 500);
-                    
-                    bootstrap.Modal.getInstance(document.getElementById('modalSwitchSite')).hide();
-                    var site = db.sites.find(function(s) { return s && s.id === siteId; });
-                    Utils.showToast('Success', 'Switched to ' + (site ? site.name : 'site'));
-                }
-            };
-
-            // ==================== CORE APP - SIMPLIFIED ====================
-            var App = {
-                init: function() {
-                    console.log('App.init called');
-                    if (!checkDependencies()) {
-                        console.warn('Missing dependencies');
-                    }
-                    
-                    Utils.loadData();
-                    SiteManager.initSites();
-                    this.loadInitialData();
-                    
-                    setTimeout(function() {
-                        App.initCharts();
-                        App.initCalendar();
-                        App.loadAllData();
-                        App.setupEventListeners();
-                        
-                        // Try to init map with multiple attempts
-                        App.initMapWithRetry();
-                        
-                        db.initialized = true;
-                    }, 500);
-                },
-
-                initMapWithRetry: function() {
-                    console.log('initMapWithRetry called');
-                    var attempts = 0;
-                    var maxAttempts = 5;
-                    
-                    function tryInit() {
-                        attempts++;
-                        console.log('Map init attempt ' + attempts + ' of ' + maxAttempts);
-                        
-                        var container = document.getElementById('map');
-                        if (!container) {
-                            console.log('Map container not found');
-                            if (attempts < maxAttempts) {
-                                setTimeout(tryInit, 500);
-                            }
-                            return;
-                        }
-                        
-                        // Check if map already exists
-                        if (container.querySelector('.leaflet-container')) {
-                            console.log('Map already exists');
-                            return;
-                        }
-                        
-                        App.initMap();
-                        
-                        // Check if map loaded
-                        setTimeout(function() {
-                            if (!container.querySelector('.leaflet-container') && attempts < maxAttempts) {
-                                console.log('Map not loaded, retrying...');
-                                tryInit();
-                            } else if (container.querySelector('.leaflet-container')) {
-                                console.log('Map loaded successfully!');
-                            }
-                        }, 1000);
-                    }
-                    
-                    tryInit();
-                },
-
-                initMap: function() {
-                    console.log('initMap called - starting map creation');
-                    
-                    var mapContainer = document.getElementById('map');
-                    
-                    if (!mapContainer) {
-                        console.error('Map container not found');
-                        return;
-                    }
-                    
-                    // Clear and prepare container
-                    mapContainer.innerHTML = '';
-                    mapContainer.style.height = '500px';
-                    mapContainer.style.minHeight = '500px';
-                    mapContainer.style.width = '100%';
-                    mapContainer.style.display = 'block';
-                    mapContainer.style.background = '#f0f0f0';
-                    
-                    var site = Utils.getCurrentSite();
-                    if (!site) {
-                        mapContainer.innerHTML = '<div class="alert alert-warning">No site selected</div>';
-                        return;
-                    }
-                    
-                    var mapData = db.siteMaps[db.currentSiteId];
-                    if (!mapData) {
-                        mapData = Utils.generateSiteLocation(db.currentSiteId);
-                        db.siteMaps[db.currentSiteId] = mapData;
-                    }
-                    
-                    // Remove existing map if any
-                    if (window.map) {
-                        try { 
-                            window.map.remove(); 
-                            window.map = null;
-                        } catch(e) {}
-                    }
-                    
-                    // Check if Leaflet is available
-                    if (typeof L === 'undefined') {
-                        console.error('Leaflet not loaded');
-                        mapContainer.innerHTML = '<div class="alert alert-danger">Leaflet library not loaded.</div>';
-                        return;
-                    }
-                    
-                    try {
-                        console.log('Creating map with center:', mapData.center);
-                        
-                        // Create the map
-                        window.map = L.map('map', {
-                            center: mapData.center,
-                            zoom: 13,
-                            zoomControl: true,
-                            attributionControl: true
-                        });
-                        
-                        // Add tile layer
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '&copy; OpenStreetMap',
-                            maxZoom: 19
-                        }).addTo(window.map);
-                        
-                        // Add site marker
-                        L.marker(mapData.center)
-                            .bindPopup('<b>' + site.name + '</b><br>' + site.location)
-                            .addTo(window.map);
-                        
-                        // Add zone polygons
-                        if (mapData.zones) {
-                            mapData.zones.forEach(function(zone) {
-                                if (zone && zone.coords) {
-                                    try {
-                                        L.polygon(zone.coords, {
-                                            color: zone.color || '#3498db',
-                                            weight: 2,
-                                            opacity: 0.8,
-                                            fillOpacity: 0.2
-                                        }).bindPopup('<b>' + zone.name + '</b>').addTo(window.map);
-                                    } catch (e) {
-                                        console.error('Error creating zone:', e);
-                                    }
-                                }
-                            });
-                        }
-                        
-                        // Add vegetation markers
-                        if (mapData.vegetationMarkers) {
-                            mapData.vegetationMarkers.forEach(function(marker) {
-                                if (marker && marker.coords) {
-                                    try {
-                                        L.circleMarker(marker.coords, {
-                                            radius: 8,
-                                            color: '#27ae60',
-                                            fillColor: '#27ae60',
-                                            fillOpacity: 0.8
-                                        }).bindPopup('<b>Vegetation:</b> ' + marker.name).addTo(window.map);
-                                    } catch (e) {
-                                        console.error('Error creating vegetation marker:', e);
-                                    }
-                                }
-                            });
-                        }
-                        
-                        // Add weed markers
-                        if (mapData.weedMarkers) {
-                            mapData.weedMarkers.forEach(function(marker) {
-                                if (marker && marker.coords) {
-                                    try {
-                                        L.circleMarker(marker.coords, {
-                                            radius: 8,
-                                            color: '#e74c3c',
-                                            fillColor: '#e74c3c',
-                                            fillOpacity: 0.8
-                                        }).bindPopup('<b>Weed:</b> ' + marker.name).addTo(window.map);
-                                    } catch (e) {
-                                        console.error('Error creating weed marker:', e);
-                                    }
-                                }
-                            });
-                        }
-                        
-                        console.log('Map created successfully');
-                        
-                        // Force resize
-                        setTimeout(function() {
-                            if (window.map) {
-                                window.map.invalidateSize(true);
-                                console.log('Map resized');
-                            }
-                        }, 300);
-                        
-                        // Initialize editing
-                        setTimeout(function() {
-                            MapEditor.initEditing();
-                        }, 500);
-                        
-                    } catch(error) {
-                        console.error('Map creation error:', error);
-                        mapContainer.innerHTML = '<div class="alert alert-danger">Map failed to load: ' + error.message + '</div>';
-                    }
-                },
-
-                // ... keep all your other functions (loadDashboard, loadAssessments, etc.)
-                // They should remain unchanged from your original code
-
-                loadAllData: function() {
-                    console.log('loadAllData called');
-                    this.loadDashboard();
-                    this.loadAssessments();
-                    this.loadSpecies();
-                    this.loadActivities();
-                    this.loadMonitoring();
-                    this.loadReports();
-                },
-
-                loadDashboard: function() {
-                    // Simplified dashboard loading
-                    var totalTasks = document.getElementById('totalTasks');
-                    if (totalTasks) totalTasks.textContent = '0';
-                    
-                    var totalAssessments = document.getElementById('totalAssessments');
-                    if (totalAssessments) totalAssessments.textContent = '0';
-                    
-                    var totalSpecies = document.getElementById('totalSpecies');
-                    if (totalSpecies) totalSpecies.textContent = '0';
-                },
-
-                loadAssessments: function() {
-                    // Simplified
-                    var tbody = document.querySelector('#assessmentsTable tbody');
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading assessments...</td></tr>';
-                },
-
-                loadSpecies: function() {
-                    // Simplified
-                    var tbody = document.querySelector('#speciesTable tbody');
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center">Loading species...</td></tr>';
-                },
-
-                loadActivities: function() {
-                    // Simplified
-                    var tbody = document.querySelector('#upcomingActivitiesTable tbody');
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading activities...</td></tr>';
-                },
-
-                loadMonitoring: function() {
-                    // Simplified
-                    var tbody = document.querySelector('#monitoringTable tbody');
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center">Loading monitoring...</td></tr>';
-                },
-
-                loadReports: function() {
-                    // Simplified
-                    var tbody = document.querySelector('#reportsTable tbody');
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading reports...</td></tr>';
-                },
-
-                loadInitialData: function() {
-                    console.log('loadInitialData called');
-                    var siteId = db.currentSiteId || (db.sites.length > 0 ? db.sites[0].id : null);
-                    
-                    if (db.assessments.length === 0 && siteId) {
-                        db.assessments = [
-                            {
-                                id: Utils.generateId(),
-                                siteId: siteId,
-                                date: '2023-06-15',
-                                assessor: 'Jane Doe',
-                                description: 'Initial assessment',
-                                components: ['flora', 'fauna'],
-                                health: 'good',
-                                threats: ['weeds'],
-                                photos: [],
-                                createdAt: '2023-06-15T10:30:00Z'
-                            }
-                        ];
-                    }
-
-                    if (db.species.length === 0 && siteId) {
-                        db.species = [
-                            {
-                                id: Utils.generateId(),
-                                siteId: siteId,
-                                scientificName: 'Eucalyptus pauciflora',
-                                commonName: 'Snow Gum',
-                                type: 'flora',
-                                status: 'native',
-                                description: 'A small to medium-sized tree',
-                                habitat: 'Alpine areas',
-                                lastObserved: '2023-06-15',
-                                image: '',
-                                notes: '',
-                                createdAt: '2023-01-10T09:20:00Z'
-                            },
-                            {
-                                id: Utils.generateId(),
-                                siteId: siteId,
-                                scientificName: 'Rubus fruticosus',
-                                commonName: 'Blackberry',
-                                type: 'flora',
-                                status: 'weed',
-                                description: 'Invasive shrub',
-                                habitat: 'Disturbed areas',
-                                lastObserved: '2023-06-10',
-                                image: '',
-                                notes: '',
-                                createdAt: '2023-02-15T11:45:00Z'
-                            }
-                        ];
-                    }
-
-                    if (db.activities.length === 0 && siteId) {
-                        db.activities = [
-                            {
-                                id: Utils.generateId(),
-                                siteId: siteId,
-                                type: 'weed-control',
-                                title: 'Weed Control - Blackberry',
-                                startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                                endDate: null,
-                                location: 'Zone 3',
-                                description: 'Manual removal and herbicide application.',
-                                assignedTo: 'John Smith',
-                                priority: 'high',
-                                status: 'planned',
-                                notes: '',
-                                createdAt: new Date().toISOString()
-                            }
-                        ];
-                    }
-
-                    if (db.monitoring.length === 0 && siteId) {
-                        db.monitoring = [
-                            {
-                                id: Utils.generateId(),
-                                siteId: siteId,
-                                type: 'vegetation-survey',
-                                date: '2023-06-15',
-                                location: 'Zone 1',
-                                observer: 'Jane Doe',
-                                findings: 'Increased native cover',
-                                species: [],
-                                photos: [],
-                                notes: '',
-                                createdAt: '2023-06-15T16:45:00Z'
-                            }
-                        ];
-                    }
-
-                    Utils.saveData();
-                },
-
-                initCharts: function() {
-                    console.log('initCharts called');
-                    // Simplified - skip chart creation for now
-                },
-
-                initCalendar: function() {
-                    console.log('initCalendar called');
-                    var calendarEl = document.getElementById('calendar');
-                    if (!calendarEl || typeof FullCalendar === 'undefined') return;
-                    
-                    if (window.calendar) {
-                        try { window.calendar.destroy(); } catch(e) {}
-                    }
-
-                    window.calendar = new FullCalendar.Calendar(calendarEl, {
-                        initialView: 'dayGridMonth',
-                        headerToolbar: {
-                            left: 'prev,next today',
-                            center: 'title',
-                            right: 'dayGridMonth'
-                        },
-                        events: [],
-                        height: 600
-                    });
-
-                    window.calendar.render();
-                },
-
-                setupEventListeners: function() {
-                    console.log('setupEventListeners called');
-                    
-                    // Site selector
-                    var siteSelector = document.getElementById('siteSelector');
-                    if (siteSelector) {
-                        siteSelector.addEventListener('change', function(e) {
-                            var siteId = parseInt(e.target.value);
-                            if (siteId && siteId !== db.currentSiteId) {
-                                var site = db.sites.find(function(s) { return s && s.id === siteId; });
-                                if (site) {
-                                    SiteManager.switchSite(siteId);
-                                }
-                            }
-                        });
-                    }
-
-                    // Edit mode button
-                    var editModeBtn = document.getElementById('editModeBtn');
-                    if (editModeBtn) {
-                        editModeBtn.addEventListener('click', function() { 
-                            MapEditor.toggleEditMode(); 
-                        });
-                    }
-
-                    // Save map button
-                    var saveMapBtn = document.getElementById('saveMapBtn');
-                    if (saveMapBtn) {
-                        saveMapBtn.addEventListener('click', function() { 
-                            MapEditor.saveMap(); 
-                        });
-                    }
-
-                    // Clear map button
-                    var clearMapBtn = document.getElementById('clearMapBtn');
-                    if (clearMapBtn) {
-                        clearMapBtn.addEventListener('click', function() { 
-                            MapEditor.clearMap(); 
-                        });
-                    }
-
-                    // Tab switching - fix map when switching to dashboard
-                    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(tab) {
-                        tab.addEventListener('shown.bs.tab', function(e) {
-                            var target = e.target.getAttribute('data-bs-target');
-                            if (target === '#dashboard') {
-                                setTimeout(function() {
-                                    if (window.map) {
-                                        window.map.invalidateSize(true);
-                                    } else {
-                                        App.initMap();
-                                    }
-                                }, 400);
-                            }
-                        });
-                    });
-
-                    // Window resize
-                    window.addEventListener('resize', function() {
-                        if (window.map) {
-                            setTimeout(function() {
-                                window.map.invalidateSize(true);
-                            }, 200);
-                        }
-                    });
-                }
-            };
-
-            // ==================== INITIALIZE ====================
-            document.addEventListener('DOMContentLoaded', function() {
-                console.log('DOMContentLoaded - starting app');
-                App.init();
-                
-                // Emergency map loader
-                setTimeout(function() {
-                    var container = document.getElementById('map');
-                    if (container && !container.querySelector('.leaflet-container')) {
-                        console.log('Emergency map loader triggered');
-                        App.initMap();
-                    }
-                }, 2000);
-                
-                // Second emergency loader
-                setTimeout(function() {
-                    var container = document.getElementById('map');
-                    if (container && !container.querySelector('.leaflet-container')) {
-                        console.log('Second emergency map loader triggered');
-                        container.innerHTML = '';
-                        container.style.height = '500px';
-                        container.style.minHeight = '500px';
-                        
-                        if (typeof L !== 'undefined') {
-                            var site = db.sites.find(function(s) { return s && s.id === db.currentSiteId; });
-                            var center = [-33.4, 150.3];
-                            if (site && db.siteMaps[site.id]) {
-                                center = db.siteMaps[site.id].center || center;
-                            }
-                            
-                            window.map = L.map('map', {
-                                center: center,
-                                zoom: 13,
-                                zoomControl: true
-                            });
-                            
-                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                                attribution: '&copy; OpenStreetMap',
-                                maxZoom: 19
-                            }).addTo(window.map);
-                            
-                            L.marker(center).bindPopup('Site Map').addTo(window.map);
-                            
-                            setTimeout(function() {
-                                if (window.map) window.map.invalidateSize(true);
-                            }, 300);
-                            
-                            console.log('Emergency map loaded');
-                        }
-                    }
-                }, 5000);
-            });
-
-            window.generateReport = function(type) {
-                console.log('Generate report:', type);
-                Utils.showToast('Info', 'Report generation coming soon', 'info');
-            };
-
-        })();
-    </script>
-
-USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FILE?
 <script>
         (function() {
             'use strict';
@@ -1534,26 +567,18 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
             // ==================== MAP EDITING FUNCTIONS ====================
             var MapEditor = {
                 initEditing: function() {
+                    console.log('MapEditor.initEditing called');
                     if (!window.map) {
                         console.error('Map not initialized for editing');
                         return;
                     }
 
-                    // Check if Geoman is available
                     if (typeof window.map.pm === 'undefined') {
                         console.warn('Leaflet Geoman not available - map editing disabled');
                         return;
                     }
 
                     try {
-                        // Remove existing controls if any
-                        try {
-                            window.map.pm.removeControls();
-                        } catch(e) {
-                            // Ignore - controls might not exist yet
-                        }
-                        
-                        // Add controls
                         window.map.pm.addControls({
                             position: 'topleft',
                             drawMarker: true,
@@ -1573,7 +598,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                             allowSelfIntersection: false
                         });
 
-                        // Only add event listeners once
                         if (!window._pmEventsAdded) {
                             window.map.on('pm:create', function(e) {
                                 MapEditor.onFeatureCreated(e);
@@ -1596,6 +620,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadFeaturesForCurrentSite: function() {
+                    console.log('Loading map features');
                     if (!db.currentSiteId) return;
 
                     var siteFeatures = db.mapFeatures[db.currentSiteId] || { zones: [], vegetation: [], weeds: [], points: [] };
@@ -1619,7 +644,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                     opacity: 0.8,
                                     fillOpacity: 0.2
                                 });
-                                
                                 polygon.featureData = feature;
                                 polygon.bindPopup(MapEditor.createFeaturePopup(feature));
                                 window.customZonesLayer.addLayer(polygon);
@@ -1640,7 +664,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                         popupAnchor: [0, -8]
                                     })
                                 });
-                                
                                 marker.featureData = feature;
                                 marker.bindPopup(MapEditor.createFeaturePopup(feature));
                                 window.customVegetationLayer.addLayer(marker);
@@ -1661,7 +684,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                         popupAnchor: [0, -8]
                                     })
                                 });
-                                
                                 marker.featureData = feature;
                                 marker.bindPopup(MapEditor.createFeaturePopup(feature));
                                 window.customWeedsLayer.addLayer(marker);
@@ -1682,7 +704,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                         popupAnchor: [0, -8]
                                     })
                                 });
-                                
                                 marker.featureData = feature;
                                 marker.bindPopup(MapEditor.createFeaturePopup(feature));
                                 window.customPointsLayer.addLayer(marker);
@@ -2158,6 +1179,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
             // ==================== SITE MANAGEMENT FUNCTIONS ====================
             var SiteManager = {
                 initSites: function() {
+                    console.log('SiteManager.initSites called');
                     if (db.sites.length === 0) {
                         var defaultSite = {
                             id: Utils.generateId(),
@@ -2488,6 +1510,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
             // ==================== CORE APP FUNCTIONS ====================
             var App = {
                 init: function() {
+                    console.log('App.init called');
                     if (!checkDependencies()) {
                         console.warn('Application running with missing dependencies');
                     }
@@ -2530,6 +1553,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadAllData: function() {
+                    console.log('loadAllData called');
                     this.loadDashboard();
                     this.loadAssessments();
                     this.loadSpecies();
@@ -2707,6 +1731,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadInitialData: function() {
+                    console.log('loadInitialData called');
                     var siteId = db.currentSiteId || (db.sites.length > 0 ? db.sites[0].id : null);
                     
                     if (db.assessments.length === 0 && siteId) {
@@ -2940,6 +1965,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 initCharts: function() {
+                    console.log('initCharts called');
                     this.updateHealthChart();
 
                     try {
@@ -3026,7 +2052,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 initMap: function() {
-                    console.log('Starting map initialization...');
+                    console.log('initMap called - starting map creation');
                     
                     var mapContainer = document.getElementById('map');
                     
@@ -3036,14 +2062,12 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                         return;
                     }
                     
-                    // Force the container to be visible and have proper size
                     mapContainer.style.display = 'block';
                     mapContainer.style.height = '500px';
                     mapContainer.style.minHeight = '500px';
                     mapContainer.style.width = '100%';
                     mapContainer.innerHTML = '';
                     
-                    // Give the DOM time to render
                     setTimeout(function() {
                         var site = Utils.getCurrentSite();
                         if (!site) {
@@ -3078,7 +2102,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                 return;
                             }
                             
-                            // Create the map with explicit options
                             window.map = L.map('map', {
                                 center: mapData.center,
                                 zoom: 13,
@@ -3096,7 +2119,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                             
                             this.createMapLayers(mapData);
                             
-                            // Force resize after map is created
                             setTimeout(function() {
                                 if (window.map) {
                                     window.map.invalidateSize(true);
@@ -3104,7 +2126,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                                 }
                             }, 300);
                             
-                            // Load custom features and initialize editing after map is ready
                             setTimeout(function() {
                                 MapEditor.loadFeaturesForCurrentSite();
                                 MapEditor.initEditing();
@@ -3229,6 +2250,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 initCalendar: function() {
+                    console.log('initCalendar called');
                     var calendarEl = document.getElementById('calendar');
                     if (!calendarEl) return;
 
@@ -3292,6 +2314,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadDashboard: function() {
+                    console.log('loadDashboard called');
                     var currentSite = Utils.getCurrentSite();
                     var filteredAssessments = Utils.filterByCurrentSite(db.assessments);
                     var filteredSpecies = Utils.filterByCurrentSite(db.species);
@@ -3407,6 +2430,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadAssessments: function() {
+                    console.log('loadAssessments called');
                     var table = document.getElementById('assessmentsTable');
                     if (!table) return;
 
@@ -3583,6 +2607,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadSpecies: function() {
+                    console.log('loadSpecies called');
                     var filteredSpecies = Utils.filterByCurrentSite(db.species);
                     
                     var cardsContainer = document.getElementById('speciesCardsContainer');
@@ -3848,6 +2873,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadActivities: function() {
+                    console.log('loadActivities called');
                     this.loadUpcomingActivities();
                     this.loadCompletedActivities();
                     this.loadOverdueActivities();
@@ -4173,6 +3199,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadMonitoring: function() {
+                    console.log('loadMonitoring called');
                     var table = document.getElementById('monitoringTable');
                     if (!table) return;
 
@@ -4328,6 +3355,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 loadReports: function() {
+                    console.log('loadReports called');
                     var table = document.getElementById('reportsTable');
                     if (!table) return;
 
@@ -4400,6 +3428,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 generateReport: function(type) {
+                    console.log('Generate report:', type);
                     var currentSite = Utils.getCurrentSite();
                     
                     var reportTypes = {
@@ -5111,6 +4140,7 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                 },
 
                 setupEventListeners: function() {
+                    console.log('setupEventListeners called');
                     var siteSelector = document.getElementById('siteSelector');
                     if (siteSelector) {
                         siteSelector.addEventListener('change', function(e) {
@@ -5275,14 +4305,12 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                         }
                     });
 
-                    // Fixed tab event listeners
                     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(tab) {
                         tab.addEventListener('shown.bs.tab', function(e) {
                             var target = e.target.getAttribute('data-bs-target');
                             
                             if (target === '#dashboard') {
                                 App.loadDashboard();
-                                // CRITICAL: Fix map when switching to dashboard tab
                                 setTimeout(function() {
                                     if (window.map) {
                                         window.map.invalidateSize(true);
@@ -5456,9 +4484,9 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
 
             // ==================== INITIALIZE APPLICATION ====================
             document.addEventListener('DOMContentLoaded', function() {
+                console.log('DOMContentLoaded - starting app');
                 App.init();
                 
-                // Emergency map loader - runs after everything
                 setTimeout(function() {
                     console.log('Running emergency map check...');
                     var container = document.getElementById('map');
@@ -5468,7 +4496,6 @@ USING THE CONTENTS OF THIS OLDER VERSION, AND PROVIDE A SINGLE UPDATED SCRIPT FI
                     }
                 }, 3000);
                 
-                // Window resize handler for map
                 window.addEventListener('resize', function() {
                     if (window.map) {
                         setTimeout(function() {
